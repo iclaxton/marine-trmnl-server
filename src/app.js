@@ -48,7 +48,6 @@ import { resolve, extname } from 'node:path';
  *     vesselConfig: object,
  *   },
  *   initialState?: {
- *     cachedHtml?: string|null,
  *     dashboardReady?: boolean,
  *     lastRefreshAt?: Date|null,
  *     lastError?: string|null,
@@ -94,7 +93,6 @@ export function createApp({ deps, paths, cfg, initialState = {} } = {}) {
 
   // ─── State ─────────────────────────────────────────────────────────────────
 
-  let cachedHtml     = initialState.cachedHtml     ?? null;
   let dashboardReady = initialState.dashboardReady ?? false;
   let lastRefreshAt  = initialState.lastRefreshAt  ?? null;
   let lastError      = initialState.lastError      ?? null;
@@ -118,7 +116,6 @@ export function createApp({ deps, paths, cfg, initialState = {} } = {}) {
       fastify.log.info('Refresh: fetching metrics…');
       const data = await fetchAllMetrics();
       const html = renderDashboard(data, { bitDepth });
-      cachedHtml = html;
 
       fastify.log.info('Refresh: taking screenshot…');
       await screenshotHtml(html, DASHBOARD_RAW);

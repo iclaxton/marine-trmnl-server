@@ -205,7 +205,7 @@ function renderWind(data, isDark) {
 </section>`;
 }
 
-function renderNavigation(data, isDark) {
+function renderNavigation(data) {
   if (!metricsConfig.navigation?.enabled || !data.navigation) {
     return `<section class="panel panel-nav"><div class="panel-title">NAVIGATION</div><div class="no-data">disabled</div></section>`;
   }
@@ -247,7 +247,7 @@ function renderNavigation(data, isDark) {
 </section>`;
 }
 
-function renderDepth(data, isDark) {
+function renderDepth(data) {
   const enabled = metricsConfig.depth?.enabled && data.depth;
   const depth   = enabled ? data.depth?.belowKeel?.stats?.last  : null;
   const wtemp   = enabled ? data.depth?.waterTemp?.stats?.last  : null;
@@ -278,7 +278,7 @@ function renderDepth(data, isDark) {
 </section>`;
 }
 
-function renderBattery(data, isDark) {
+function renderBattery(data) {
   const banks    = data._banksMeta ?? [];
   const enabled  = metricsConfig.battery?.enabled;
 
@@ -313,7 +313,7 @@ function renderBattery(data, isDark) {
 </section>`;
 }
 
-function renderEnvironment(data, isDark) {
+function renderEnvironment(data) {
   const enabled = metricsConfig.environment?.enabled;
   const cabin   = enabled ? data.environment?.insideTemp?.stats?.last : null;
 
@@ -510,10 +510,10 @@ export function renderDashboard(data, { bitDepth = 1 } = {}) {
   const dateStr  = now.toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric' });
 
   const windHtml = renderWind(data, isDark);
-  const navHtml  = renderNavigation(data, isDark);
-  const depHtml  = renderDepth(data, isDark);
-  const batHtml  = renderBattery(data, isDark);
-  const envHtml  = renderEnvironment(data, isDark);
+  const navHtml  = renderNavigation(data);
+  const depHtml  = renderDepth(data);
+  const batHtml  = renderBattery(data);
+  const envHtml  = renderEnvironment(data);
 
   return `<!DOCTYPE html>
 <html lang="en">
