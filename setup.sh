@@ -295,9 +295,17 @@ echo ""
 
 VESSEL_NAME=$(prompt "VESSEL_NAME" "Vessel name (shown on dashboard)" "$VESSEL_NAME_DEFAULT")
 
-  # Determine hostname for baseUrl default
+  # Determine hostname for baseUrl default.
+  # Use the short hostname + .local (mDNS) so the TRMNL device can resolve it.
+  # If hostname already contains a dot (real FQDN/IP) leave it as-is.
   if [[ -z "$BYOS_BASE_URL_DEFAULT" ]]; then
     _HOSTNAME=$(hostname -f 2>/dev/null || hostname)
+    # Strip any trailing dots from FQDN
+    _HOSTNAME="${_HOSTNAME%.}"
+    # Append .local when there are no dots (bare hostname, e.g. HEBEPI → HEBEPI.local)
+    if [[ "$_HOSTNAME" != *.* ]]; then
+      _HOSTNAME="${_HOSTNAME}.local"
+    fi
     BYOS_BASE_URL_DEFAULT="http://${_HOSTNAME}:${SERVER_PORT_DEFAULT}"
   fi
 
