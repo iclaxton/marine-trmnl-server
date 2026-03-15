@@ -28,7 +28,7 @@ SignalK (boat sensors)
 - **Runtime:** Node.js 20+, ESM (`"type": "module"`) — always `import`/`export`, never `require()`
 - **HTTP:** Fastify v5.2.1
 - **Screenshot:** puppeteer-core v24 (headless Chrome)
-- **Image conversion:** ImageMagick CLI (`convert` command — not a Node package)
+- **Image conversion:** ImageMagick CLI (`convert` command — not a Node package) — see [TRMNL ImageMagick Guide](https://docs.trmnl.com/go/diy/imagemagick-guide)
 - **InfluxDB:** `@influxdata/influxdb-client`
 - **InfluxDB org/bucket:** configurable via `config.yaml` (`influxdb.org` / `influxdb.bucket`)
 - **Config:** `js-yaml` parsing `config.yaml`; secrets via `dotenv` from `.env`
@@ -53,7 +53,10 @@ test/
   unit/         — unit tests; import modules directly with mock inputs
   integration/  — instantiate createApp() with injected mock deps; use fastify.inject()
 config.yaml     — all non-secret configuration
-.env            — INFLUXDB_TOKEN (gitignored; see .env.example)
+.env            — secrets: INFLUXDB_TOKEN, INFLUXDB_URL, INFLUXDB_ORG, INFLUXDB_BUCKET,
+                  VESSEL_NAME, CHROMIUM_PATH (gitignored; see .env.example)
+.env.example    — safe template committed to git
+setup.sh        — interactive guided setup (deps, .env, optional service)
 ```
 
 ---
@@ -211,6 +214,11 @@ display:
 ```
 # .env (gitignored — never commit)
 INFLUXDB_TOKEN=<token>
+INFLUXDB_URL=http://localhost:8086      # override for remote InfluxDB
+INFLUXDB_ORG=my-org
+INFLUXDB_BUCKET=signalk
+VESSEL_NAME=MY BOAT
+CHROMIUM_PATH=/usr/bin/chromium-browser # override for macOS dev
 ```
 
 ---

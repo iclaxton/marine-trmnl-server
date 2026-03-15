@@ -15,10 +15,13 @@ SignalK → InfluxDB 2.x (localhost:8086) → HTML render (800×480) → Puppete
 ## Common Commands
 
 ```bash
-# Run all tests
+# Guided setup (dependencies, .env, optional service)
+bash setup.sh
+
+# Run all tests (unit + integration; excludes influx.test.js which needs live InfluxDB)
 npm test
-# or
-node --test test/**/*.test.js
+# Run everything including live InfluxDB tests
+npm run test:integration
 
 # Start the server (production)
 node src/server.js
@@ -67,8 +70,10 @@ test/
   unit/         — pure function tests; no mocking library needed
   integration/  — createApp() with mock deps + fastify.inject()
 config.yaml     — all non-secret config
-.env            — INFLUXDB_TOKEN (gitignored)
+.env            — secrets: INFLUXDB_TOKEN, INFLUXDB_URL, INFLUXDB_ORG, INFLUXDB_BUCKET,
+                  VESSEL_NAME, CHROMIUM_PATH (gitignored; see .env.example)
 .env.example    — safe template committed to git
+setup.sh        — interactive guided setup script (deps, .env, optional service)
 ```
 
 ---
@@ -119,6 +124,8 @@ const res = await fastify.inject({ method: 'GET', url: '/health' });
 ---
 
 ## Image Pipeline Details
+
+Reference: [TRMNL ImageMagick Guide](https://docs.trmnl.com/go/diy/imagemagick-guide)
 
 | `bitDepth` | Function | Output |
 |---|---|---|

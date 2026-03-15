@@ -41,6 +41,9 @@ Each value shows the **current reading** (bold/large) plus a
 
 ## Quick start
 
+> **Tip:** run `bash setup.sh` for a guided interactive setup that handles
+> dependencies, `.env` creation, and optional service installation automatically.
+
 ```bash
 # 1. Install system dependencies (Pi)
 sudo apt install chromium-browser imagemagick
@@ -50,7 +53,7 @@ npm install
 
 # 3. Create your .env file
 cp .env.example .env
-# Then edit .env with your InfluxDB token
+# Then edit .env — set INFLUXDB_TOKEN, and any other values to override
 
 # 4. Edit config.yaml
 #    - Set byos.baseUrl to your Pi's IP (e.g. http://192.168.1.100:3001)
@@ -193,6 +196,11 @@ It then fetches the BMP directly and renders it.
 ### Pi setup
 
 ```bash
+# Recommended: guided setup (handles deps, .env, optional systemd service)
+bash setup.sh
+
+# --- or follow the manual steps below ---
+
 # 1. Install system dependencies
 sudo apt update
 sudo apt install chromium-browser imagemagick
@@ -334,6 +342,7 @@ marine-trmnl-server/
 ├── data/              — Device registry JSON (git-ignored)
 ├── config.yaml        — All user-facing configuration
 ├── .env.example       — Template for secrets
+├── setup.sh           — Interactive guided setup (dependencies, .env, service install)
 ├── Dockerfile         — Multi-stage build (Node 20 + Chromium + ImageMagick)
 ├── docker-compose.yml — Docker Compose for Pi / local deployment
 └── package.json
