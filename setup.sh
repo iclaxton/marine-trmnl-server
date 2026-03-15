@@ -156,7 +156,8 @@ else
     success "Node.js installed ✓"
   elif [[ "$IS_PI" == "true" ]] || [[ "$OS" == "linux" ]]; then
     info "Installing Node.js 20 via NodeSource…"
-    curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+    curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash - 2>/dev/null || true
+    sudo apt-get update -qq --allow-releaseinfo-change 2>/dev/null || true
     sudo apt-get install -y nodejs
     success "Node.js installed ✓"
   fi
@@ -184,7 +185,7 @@ else
     IM_CMD="magick"
   elif [[ "$IS_PI" == "true" ]] || [[ "$OS" == "linux" ]]; then
     info "Installing ImageMagick via apt…"
-    sudo apt-get update -qq
+    sudo apt-get update -qq --allow-releaseinfo-change 2>/dev/null || true
     sudo apt-get install -y imagemagick
     success "ImageMagick installed ✓"
     IM_CMD="convert"
@@ -234,13 +235,13 @@ else
     warn "Chromium not found."
     if [[ "$IS_PI" == "true" ]]; then
       info "Installing chromium-browser via apt…"
-      sudo apt-get update -qq
+      sudo apt-get update -qq --allow-releaseinfo-change 2>/dev/null || true
       sudo apt-get install -y chromium-browser
       CHROMIUM_PATH_DEFAULT="/usr/bin/chromium-browser"
       success "chromium-browser installed ✓"
     else
       info "Installing chromium via apt…"
-      sudo apt-get update -qq
+      sudo apt-get update -qq --allow-releaseinfo-change 2>/dev/null || true
       sudo apt-get install -y chromium
       CHROMIUM_PATH_DEFAULT=$(command -v chromium || echo "/usr/bin/chromium")
       success "chromium installed ✓"
