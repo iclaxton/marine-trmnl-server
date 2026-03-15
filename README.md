@@ -100,7 +100,6 @@ influxdb:
 display:
   refreshIntervalSeconds: 900   # 15 min — also sets the stats window
   theme: "light"                # "light" or "dark"
-  units: "metric"
 
 metrics:
   wind:
