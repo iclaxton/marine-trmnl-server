@@ -262,10 +262,35 @@ echo ""
 
 echo -e "${BOLD}── Step 5: Environment configuration (.env) ─────────────────${RESET}"
 
+# Load existing .env values as defaults (so we pre-populate prompts)
+VESSEL_NAME_DEFAULT="MY BOAT"
+INFLUXDB_URL_DEFAULT="http://localhost:8086"
+INFLUXDB_TOKEN_DEFAULT=""
+INFLUXDB_ORG_DEFAULT="my-org"
+INFLUXDB_BUCKET_DEFAULT="signalk"
+
 if [[ -f .env ]]; then
-  warn ".env already exists."
-  if ! prompt_yesno "Overwrite it?" "n"; then
-    info "Keeping existing .env."
+  while IFS='=' read -r _k _v; do
+    [[ "$_k" =~ ^# ]] && continue; [[ -z "$_k" ]] && continue
+    _v="${_v%%#*}"; _v="${_v//\"/}"; _v="${_v# }"; _v="${_v% }"
+    case "$_k" in
+      VESSEL_NAME)    VESSEL_NAME_DEFAULT="$_v" ;;
+      INFLUXDB_URL)   INFLUXDB_URL_DEFAULT="$_v" ;;
+      INFLUXDB_TOKEN) INFLUXDB_TOKEN_DEFAULT="$_v" ;;
+      INFLUXDB_ORG)   INFLUXDB_ORG_DEFAULT="$_v" ;;
+      INFLUXDB_BUCKET) INFLUXDB_BUCKET_DEFAULT="$_v" ;;
+    esac
+  done < .env
+  warn ".env already exists — existing values shown as defaults."
+  if ! prompt_yesno "Edit configuration values?" "n"; then
+    info "Keeping existing .env unchanged."
+    # Export loaded values for use in connection test (Step 7)
+    VESSEL_NAME="$VESSEL_NAME_DEFAULT"
+    INFLUXDB_URL="$INFLUXDB_URL_DEFAULT"
+    INFLUXDB_TOKEN="$INFLUXDB_TOKEN_DEFAULT"
+    INFLUXDB_ORG="$INFLUXDB_ORG_DEFAULT"
+    INFLUXDB_BUCKET="$INFLUXDB_BUCKET_DEFAULT"
+    [[ "$OS" == "macos" ]] && CHROMIUM_PATH="$CHROMIUM_PATH_DEFAULT"
     echo ""
   else
     mv .env ".env.backup.$(date +%Y%m%d%H%M%S)"
@@ -282,18 +307,11 @@ if [[ "${WRITE_ENV:-false}" == "true" ]]; then
   info "Press Enter to accept the [default] shown in brackets."
   echo ""
 
-  VESSEL_NAME=$(prompt "VESSEL_NAME" "Vessel name (shown on dashboard)" "MY BOAT")
-
-  # InfluxDB URL default depends on OS
-  if [[ "$IS_PI" == "true" ]]; then
-    INFLUXDB_URL_DEFAULT="http://localhost:8086"
-  else
-    INFLUXDB_URL_DEFAULT="http://localhost:8086"
-  fi
+  VESSEL_NAME=$(prompt "VESSEL_NAME" "Vessel name (shown on dashboard)" "$VESSEL_NAME_DEFAULT")
   INFLUXDB_URL=$(prompt "INFLUXDB_URL" "InfluxDB URL" "$INFLUXDB_URL_DEFAULT")
-  INFLUXDB_TOKEN=$(prompt "INFLUXDB_TOKEN" "InfluxDB API token (from InfluxDB UI → API Tokens)" "")
-  INFLUXDB_ORG=$(prompt "INFLUXDB_ORG" "InfluxDB organisation name" "my-org")
-  INFLUXDB_BUCKET=$(prompt "INFLUXDB_BUCKET" "InfluxDB bucket name" "signalk")
+  INFLUXDB_TOKEN=$(prompt "INFLUXDB_TOKEN" "InfluxDB API token (from InfluxDB UI → API Tokens)" "$INFLUXDB_TOKEN_DEFAULT")
+  INFLUXDB_ORG=$(prompt "INFLUXDB_ORG" "InfluxDB organisation name" "$INFLUXDB_ORG_DEFAULT")
+  INFLUXDB_BUCKET=$(prompt "INFLUXDB_BUCKET" "InfluxDB bucket name" "$INFLUXDB_BUCKET_DEFAULT")
 
   # CHROMIUM_PATH only needed if not the default Pi path
   if [[ "$OS" == "macos" ]]; then
@@ -334,69 +352,84 @@ echo ""
 
 echo -e "${BOLD}── Step 7: Test InfluxDB connection ───────────────────────${RESET}"
 
-# Source .env to get the latest values (may have been kept from a prior run)
-_INFLUXDB_URL=""
-_INFLUXDB_TOKEN=""
-_INFLUXDB_ORG=""
-_INFLUXDB_BUCKET=""
-if [[ -f .env ]]; then
-  while IFS='=' read -r key val; do
-    [[ "$key" =~ ^# ]] && continue
-    [[ -z "$key" ]] && continue
-    val="${val%%#*}"      # strip inline comments
-    val="${val//\"/}"     # strip quotes
-    val="${val// /}"      # trim spaces
-    case "$key" in
-      INFLUXDB_URL)    _INFLUXDB_URL="$val" ;;
-      INFLUXDB_TOKEN)  _INFLUXDB_TOKEN="$val" ;;
-      INFLUXDB_ORG)    _INFLUXDB_ORG="$val" ;;
-      INFLUXDB_BUCKET) _INFLUXDB_BUCKET="$val" ;;
-    esac
-  done < .env
-fi
-
-# Fall back to values entered this session if .env wasn't (re)written
-_INFLUXDB_URL="${_INFLUXDB_URL:-${INFLUXDB_URL:-http://localhost:8086}}"
-_INFLUXDB_TOKEN="${_INFLUXDB_TOKEN:-${INFLUXDB_TOKEN:-}}"
-_INFLUXDB_ORG="${_INFLUXDB_ORG:-${INFLUXDB_ORG:-}}"
-_INFLUXDB_BUCKET="${_INFLUXDB_BUCKET:-${INFLUXDB_BUCKET:-}}"
-
-info "Testing connection to ${_INFLUXDB_URL}…"
+_influx_test() {
+  local url="$1" token="$2" org="$3" bucket="$4"
+  if [[ -z "$token" ]]; then
+    warn "INFLUXDB_TOKEN is empty — cannot test connection."
+    return 1
+  fi
+  if ! command_exists curl; then
+    warn "curl not found — skipping connection test."
+    return 0
+  fi
+  local status
+  status=$(curl -s -o /dev/null -w "%{http_code}" \
+    --max-time 5 \
+    -H "Authorization: Token ${token}" \
+    "${url}/api/v2/buckets?name=${bucket}&org=${org}" 2>/dev/null || echo "000")
+  case "$status" in
+    200) success "InfluxDB connection OK (HTTP 200) ✓"; return 0 ;;
+    000) warn "Could not reach InfluxDB at ${url} (connection refused or timeout)." ;;
+    401) warn "HTTP 401 Unauthorized — INFLUXDB_TOKEN is invalid or expired." ;;
+    403) warn "HTTP 403 Forbidden — token lacks read access to this org/bucket." ;;
+    404) warn "HTTP 404 — organisation or bucket not found. Check INFLUXDB_ORG and INFLUXDB_BUCKET." ;;
+    *)   warn "Unexpected HTTP ${status} from ${url}" ;;
+  esac
+  return 1
+}
 
 _INFLUX_OK=false
-if [[ -z "${_INFLUXDB_TOKEN}" ]]; then
-  warn "INFLUXDB_TOKEN is empty — skipping connection test."
-elif ! command_exists curl; then
-  warn "curl not found — skipping connection test."
-else
-  _HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
-    --max-time 5 \
-    -H "Authorization: Token ${_INFLUXDB_TOKEN}" \
-    "${_INFLUXDB_URL}/api/v2/buckets?name=${_INFLUXDB_BUCKET}&org=${_INFLUXDB_ORG}" 2>/dev/null || echo "000")
-
-  if [[ "$_HTTP_STATUS" == "200" ]]; then
-    success "InfluxDB connection OK (HTTP 200) ✓"
-    _INFLUX_OK=true
-  elif [[ "$_HTTP_STATUS" == "000" ]]; then
-    warn "Could not reach InfluxDB at ${_INFLUXDB_URL} (connection refused or timeout)."
-    warn "Check that InfluxDB is running and INFLUXDB_URL is correct in .env"
-  elif [[ "$_HTTP_STATUS" == "401" ]]; then
-    warn "InfluxDB returned 401 Unauthorized — check your INFLUXDB_TOKEN in .env"
-  elif [[ "$_HTTP_STATUS" == "404" ]]; then
-    warn "InfluxDB returned 404 — check INFLUXDB_ORG and INFLUXDB_BUCKET in .env"
-  else
-    warn "InfluxDB returned unexpected HTTP ${_HTTP_STATUS} from ${_INFLUXDB_URL}"
-  fi
-fi
-
-if [[ "$_INFLUX_OK" == "false" ]]; then
+while true; do
+  info "Testing connection to ${INFLUXDB_URL}…"
+  info "  URL:    ${INFLUXDB_URL}"
+  info "  Org:    ${INFLUXDB_ORG}"
+  info "  Bucket: ${INFLUXDB_BUCKET}"
+  info "  Token:  ${INFLUXDB_TOKEN:0:6}…(hidden)"
   echo ""
-  if ! prompt_yesno "Continue setup anyway?" "y"; then
-    echo ""
-    info "Edit .env with correct InfluxDB credentials, then re-run: bash setup.sh"
-    exit 1
+
+  if _influx_test "$INFLUXDB_URL" "$INFLUXDB_TOKEN" "$INFLUXDB_ORG" "$INFLUXDB_BUCKET"; then
+    _INFLUX_OK=true
+    break
   fi
-fi
+
+  echo ""
+  echo "  Options:"
+  echo "    1) Re-enter InfluxDB credentials"
+  echo "    2) Continue without a working connection"
+  echo "    3) Abort setup"
+  echo ""
+  _choice=""
+  read -rp "$(echo -e "${BOLD}Choice${RESET} [${CYAN}1${RESET}]: ")" _choice </dev/tty
+  _choice="${_choice:-1}"
+
+  case "$_choice" in
+    1)
+      echo ""
+      INFLUXDB_URL=$(prompt "INFLUXDB_URL" "InfluxDB URL" "$INFLUXDB_URL")
+      INFLUXDB_TOKEN=$(prompt "INFLUXDB_TOKEN" "InfluxDB API token" "$INFLUXDB_TOKEN")
+      INFLUXDB_ORG=$(prompt "INFLUXDB_ORG" "InfluxDB organisation name" "$INFLUXDB_ORG")
+      INFLUXDB_BUCKET=$(prompt "INFLUXDB_BUCKET" "InfluxDB bucket name" "$INFLUXDB_BUCKET")
+      # Rewrite .env with corrected values
+      cat > .env <<EOF
+# Marine TRMNL Server — Environment Configuration
+# Updated by setup.sh on $(date)
+
+VESSEL_NAME=${VESSEL_NAME}
+
+INFLUXDB_URL=${INFLUXDB_URL}
+INFLUXDB_TOKEN=${INFLUXDB_TOKEN}
+INFLUXDB_ORG=${INFLUXDB_ORG}
+INFLUXDB_BUCKET=${INFLUXDB_BUCKET}
+EOF
+      [[ "$OS" == "macos" ]] && echo "CHROMIUM_PATH=${CHROMIUM_PATH}" >> .env
+      success ".env updated ✓"
+      echo ""
+      ;;
+    2) info "Continuing without a verified InfluxDB connection."; break ;;
+    3) echo ""; info "Aborting. Fix your InfluxDB credentials and re-run: bash setup.sh"; exit 1 ;;
+    *) warn "Invalid choice. Enter 1, 2, or 3." ;;
+  esac
+done
 echo ""
 
 # ── Step 8: Service installation ───────────────────────────────────────────────
