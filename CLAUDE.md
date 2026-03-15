@@ -59,7 +59,7 @@ src/
   converter.js  — toDisplayImage(), pngToBmp3(), pngTo2BitGrayscale(), displayExtension()
   devices.js    — createDeviceStore(); file-backed JSON device registry
   influx.js     — queryStats(), queryTimeSeries(), buildQuery helpers
-  renderer.js   — renderDashboard(), renderSetupScreen(), buildCss(), pressureSparklineSvg()
+  renderer.js   — renderDashboard(), renderSetupScreen(), buildPreviewPage(), buildCss(), pressureSparklineSvg()
   screenshot.js — screenshotHtml() Puppeteer wrapper
   server.js     — production entry point; wires real deps and starts Fastify
   utils.js      — converters: mps_to_kts, rad_to_deg, kelvin_to_c, pa_to_hpa, applyConversion()
@@ -83,7 +83,17 @@ export function createApp({ deps, paths, cfg, initialState = {} }) { … }
 
 // Integration test
 const { fastify } = createApp({
-  deps: { fetchAllMetrics: async () => ({}), renderDashboard: async () => '<html/>', … },
+  deps: {
+    fetchAllMetrics: async () => ({}),
+    renderDashboard: async () => '<html/>',
+    renderSetupScreen: () => '<html/>',
+    buildPreviewPage: (name) => `<html><title>${name}</title></html>`,
+    screenshotHtml: async () => {},
+    toDisplayImage: async () => {},
+    displayExtension: () => 'bmp',
+    checkImageMagick: async () => 'magick',
+    devices: { getOrCreate, get, updateTelemetry, updateCapabilities, list },
+  },
   paths: { screensDir: '/tmp/…', DASHBOARD_RAW: '…', DASHBOARD_DISPLAY: '…', SETUP_RAW: '…', SETUP_DISPLAY: '…' },
   cfg: { byosConfig: { baseUrl: 'http://localhost:3001' }, displayConfig: { bitDepth: 1, refreshIntervalSeconds: 900 }, … },
   initialState: { dashboardReady: true },
@@ -100,8 +110,10 @@ const res = await fastify.inject({ method: 'GET', url: '/health' });
 | `GET /api/setup` | BYOS setup payload for TRMNL firmware |
 | `GET /api/display` | Next image URL + refresh interval |
 | `POST /api/log` | Firmware telemetry (calls `updateTelemetry()`) |
+| `GET /api/metrics` | Full `fetchAllMetrics()` JSON — used by `/preview` |
+| `GET /api/render/:format` | On-demand render: `bmp` (1-bit) or `png` (2-bit); runs full pipeline |
 | `GET /screens/:file` | Serve generated image files |
-| `GET /preview` | Human-readable HTML dashboard |
+| `GET /preview` | Live browser dashboard (fetches `/api/metrics`, auto-refreshes every 30s) |
 | `GET /health` | JSON health/status |
 
 ---

@@ -62,7 +62,7 @@ cp .env.example .env
 npm start
 ```
 
-Open `http://<your-pi-ip>:3001/preview` in a browser to see the dashboard.
+Open `http://<your-pi-ip>:3001/preview` in a browser to see the live dashboard (auto-refreshes every 30 s).
 
 > **`npm audit` note:** there are 4 moderate warnings in `yauzl` (via
 > `@puppeteer/browsers`). That code path is only used to *download* bundled
@@ -153,14 +153,26 @@ The device talks directly to the Pi — no TRMNL cloud involvement.
 
 ### Image pipeline
 
+The **scheduled pipeline** (every `refreshIntervalSeconds`) generates the file the TRMNL device fetches:
+
 ```
 InfluxDB metrics
-    → HTML render (renderer.js)
+    → HTML render (renderer.js, bitDepth-aware)
     → Puppeteer headless screenshot → PNG
-    → ImageMagick BMP3 conversion (800×480, 1-bit monochrome)
-    → /screens/dashboard.bmp
-    → served at {baseUrl}/screens/dashboard.bmp
+    → ImageMagick conversion
+    → /screens/dashboard.bmp  (bitDepth=1, 1-bit monochrome)
+       /screens/dashboard.png  (bitDepth=2, 4-level grayscale)
+    → served at {baseUrl}/screens/dashboard.<ext>
 ```
+
+The **on-demand render** endpoints run the same pipeline immediately and stream the result:
+
+```
+GET /api/render/bmp  → 1-bit monochrome BMP3   (TRMNL Standard / Developer)
+GET /api/render/png  → 4-level grayscale PNG    (TRMNL OG)
+```
+
+These are independent of the scheduled file — useful for layout development.
 
 The device hits `GET /api/display` and receives:
 ```json
@@ -250,8 +262,11 @@ sudo systemctl status marine-trmnl
 | `GET /api/setup` | Device provisioning — `ID: <mac>` header required |
 | `GET /api/display` | Returns `image_url` + `refresh_rate` JSON for the device |
 | `POST /api/log` | Device telemetry logging (battery, WiFi, firmware) |
-| `GET /screens/:file` | Serves the generated `dashboard.bmp` / `setup.bmp` |
-| `GET /preview` | Raw HTML in browser; `?refresh` forces a full rebuild |
+| `GET /api/metrics` | Live metrics JSON from InfluxDB (`fetchAllMetrics()` payload) |
+| `GET /api/render/bmp` | On-demand: render + convert to 1-bit BMP3, stream result |
+| `GET /api/render/png` | On-demand: render + convert to 4-level grayscale PNG, stream result |
+| `GET /screens/:file` | Serves the generated `dashboard.bmp` / `setup.bmp` etc. |
+| `GET /preview` | Live browser dashboard — fetches `/api/metrics`, auto-refreshes every 30 s |
 | `GET /health` | JSON status (cache state, last error, device count) |
 
 ---
@@ -261,12 +276,13 @@ sudo systemctl status marine-trmnl
 ```
 marine-trmnl-server/
 ├── src/
-│   ├── server.js      — Fastify BYOS API (/api/setup, /api/display, /api/log, /screens/, /preview, /health)
+│   ├── server.js      — Fastify BYOS API + all routes; wires real deps
+│   ├── app.js         — createApp() factory; all routes; deps injected
 │   ├── screenshot.js  — Puppeteer HTML→PNG (system Chromium, Pi-optimised flags)
-│   ├── converter.js   — ImageMagick PNG→BMP3 (1-bit monochrome, IM6/7 compatible)
+│   ├── converter.js   — ImageMagick PNG→BMP3 / PNG→2-bit grayscale
 │   ├── devices.js     — File-backed device registry (data/devices.json)
-│   ├── influx.js      — InfluxDB 2.x Flux queries (windowed min/max/mean/last)
-│   ├── renderer.js    — 800×480 HTML dashboard + setup screen
+│   ├── influx.js      — InfluxDB 2.x Flux queries (windowed min/max/mean/last + time-series)
+│   ├── renderer.js    — 800×480 HTML dashboard, setup screen, browser preview page
 │   ├── utils.js       — Unit conversions, formatting helpers
 │   └── config.js      — YAML config loader with env var interpolation
 ├── screens/           — Generated BMP/PNG files (git-ignored)

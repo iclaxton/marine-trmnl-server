@@ -8,7 +8,7 @@ mounted aboard a sailing boat (vessel: **HEBE**). It runs on a Raspberry Pi name
 **Data pipeline:**
 ```
 SignalK (boat sensors)
-  → InfluxDB 2.x  (hebepi:8086, bucket: "signalk", org: "marine")
+  → InfluxDB 2.x  (hebepi:8086, org: "Hebe", bucket: "Hebe")
   → HTML render   (src/renderer.js — 800×480 CSS grid dashboard)
   → Puppeteer     (headless Chrome screenshot → PNG)
   → ImageMagick   (PNG → BMP3 monochrome OR 4-level grayscale PNG)
@@ -45,7 +45,7 @@ src/
   converter.js  — toDisplayImage(), pngToBmp3(), pngTo2BitGrayscale(), displayExtension()
   devices.js    — createDeviceStore(); file-backed JSON device registry
   influx.js     — queryStats(), queryTimeSeries(), buildQuery helpers
-  renderer.js   — renderDashboard(), renderSetupScreen(), buildCss(), pressureSparklineSvg()
+  renderer.js   — renderDashboard(), renderSetupScreen(), buildPreviewPage(), buildCss(), pressureSparklineSvg()
   screenshot.js — screenshotHtml() Puppeteer wrapper
   server.js     — production entry point; wires deps and starts Fastify
   utils.js      — SI unit converters: mps_to_kts, rad_to_deg, kelvin_to_c, pa_to_hpa, etc.
@@ -79,8 +79,10 @@ const client = new InfluxDB({ url: config.influxdb.url }); // top-level side eff
 | `GET /api/setup` | Returns device setup JSON |
 | `GET /api/display` | Returns next image URL + refresh interval |
 | `POST /api/log` | Receives firmware telemetry; calls `updateTelemetry()` |
+| `GET /api/metrics` | Returns full `fetchAllMetrics()` JSON payload |
+| `GET /api/render/:format` | On-demand render in `bmp` or `png`; runs full pipeline |
 | `GET /screens/:file` | Serves generated image files |
-| `GET /preview` | Human-readable HTML dashboard preview |
+| `GET /preview` | Live browser dashboard (auto-refreshes from `/api/metrics`) |
 | `GET /health` | JSON health/status endpoint |
 
 ### Image File Paths
