@@ -9,7 +9,7 @@ Reads windowed statistics (min / avg / max) from **InfluxDB 2.x** (fed by
 [SignalK](https://signalk.org)) and serves a pixel-perfect **800×480 HTML
 dashboard** designed for the TRMNL e-ink display.
 
-![Marine TRMNL dashboard screenshot](docs/dashboard.png)
+![Marine TRMNL dashboard screenshot](https://raw.githubusercontent.com/iclaxton/marine-trmnl-server/main/docs/dashboard.png)
 
 ---
 
