@@ -146,7 +146,7 @@ export const mps_to_kts = (v) => v * 1.94384;
 
 ## InfluxDB
 
-- **URL:** `http://hebepi:8086` | **org:** `marine` | **bucket:** `signalk`
+- **URL:** `http://hebepi:8086` | **org:** `Hebe` | **bucket:** `Hebe` | **orgID:** `718b491b0ca68e0e`
 - **Token:** `INFLUXDB_TOKEN` env var (never hardcode)
 - **Schema:** `path_as_measurement` — measurement = SignalK path, field = `"value"`
 - `queryStats(metrics)` → `{ [skPath]: { min, max, mean, last } }`

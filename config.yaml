@@ -35,8 +35,8 @@ server:
 influxdb:
   url: "http://hebepi:8086"
   token: "${INFLUXDB_TOKEN}"      # Set in .env
-  org: "marine"
-  bucket: "signalk"
+  org: "Hebe"
+  bucket: "Hebe"
 
   # Schema used by your SignalK→InfluxDB plugin.
   # "path_as_measurement" : measurement = SK path, field = "value"  (signalk-to-influxdb v1)

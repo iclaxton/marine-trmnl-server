@@ -30,6 +30,7 @@ SignalK (boat sensors)
 - **Screenshot:** puppeteer-core v24 (headless Chrome)
 - **Image conversion:** ImageMagick CLI (`convert` command — not a Node package)
 - **InfluxDB:** `@influxdata/influxdb-client`
+- **InfluxDB org/bucket:** `Hebe` / `Hebe` (orgID: `718b491b0ca68e0e`)
 - **Config:** `js-yaml` parsing `config.yaml`; secrets via `dotenv` from `.env`
 - **Tests:** `node:test` built-in only — no Jest, Mocha, Vitest, or any other test framework
 
@@ -195,8 +196,8 @@ server:
 influxdb:
   url: "http://hebepi:8086"
   token: "${INFLUXDB_TOKEN}"       # from .env
-  org: "marine"
-  bucket: "signalk"
+  org: "Hebe"
+  bucket: "Hebe"
   schema: "path_as_measurement"   # SignalK→InfluxDB v1 plugin format
 
 display:
