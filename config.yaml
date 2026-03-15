@@ -35,7 +35,7 @@ server:
 influxdb:
   url: "http://hebepi:8086"
   token: "${INFLUXDB_TOKEN}"      # Set in .env
-  org: "Hebe"
+  org: "Hebe"                    # orgID: 718b491b0ca68e0e
   bucket: "Hebe"
 
   # Schema used by your SignalK→InfluxDB plugin.
