@@ -1,12 +1,12 @@
 /**
  * Integration tests — InfluxDB query layer (src/influx.js)
  *
- * These tests run against the REAL InfluxDB on hebepi:8086.
+ * These tests run against the REAL InfluxDB at the URL configured in config.yaml.
  * Requirements:
- *   - hebepi reachable on the network
+ *   - InfluxDB reachable on the network
  *   - INFLUXDB_TOKEN set in .env (or environment)
  *
- * If hebepi is unreachable every test is automatically skipped — the suite
+ * If InfluxDB is unreachable every test is automatically skipped — the suite
  * will not produce failures in a disconnected environment.
  *
  * Run with: node --test test/integration/influx.test.js
@@ -21,15 +21,16 @@ import {
   queryStats,
   queryTimeSeries,
 } from '../../src/influx.js';
+import { influxConfig } from '../../src/config.js';
 
 // ─── Connectivity guard ───────────────────────────────────────────────────────
 
-let hebepiAvailable = false;
+let influxAvailable = false;
 let allMetrics;       // populated once from fetchAllMetrics() in before()
 
-/** Call t.skip() if hebepi is offline; used in every test. */
+/** Call t.skip() if InfluxDB is offline; used in every test. */
 function skipIfOffline(t) {
-  if (!hebepiAvailable) t.skip('hebepi:8086 unreachable — skipped');
+  if (!influxAvailable) t.skip(`${influxConfig.url} unreachable — skipped`);
 }
 
 /** Assert that a stats object has the four expected keys. */
@@ -58,11 +59,11 @@ before(async () => {
   try {
     // Use a short 5-minute window just to confirm connectivity
     await queryStats('environment.outside.pressure', '5m');
-    hebepiAvailable = true;
+    influxAvailable = true;
     // Now fetch the full metrics payload used by the display
     allMetrics = await fetchAllMetrics();
   } catch (err) {
-    console.warn(`\n⚠  hebepi:8086 unavailable — InfluxDB integration tests skipped`);
+    console.warn(`\n⚠  ${influxConfig.url} unavailable — InfluxDB integration tests skipped`);
     console.warn(`   (${err.message})\n`);
   }
 });

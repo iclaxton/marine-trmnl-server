@@ -12,6 +12,7 @@ import { test, describe } from 'node:test';
 import { strict as assert } from 'node:assert';
 
 import { buildStatsQuery, buildTimeSeriesQuery } from '../../src/influx.js';
+import { influxConfig } from '../../src/config.js';
 
 // ─── buildStatsQuery ────────────────────────────────────────────────────────
 
@@ -19,7 +20,7 @@ describe('buildStatsQuery — path_as_measurement schema (default)', () => {
   const Q = buildStatsQuery('environment.wind.speedApparent', '15m');
 
   test('uses the configured bucket name', () => {
-    assert.match(Q, /from\(bucket: "Hebe"\)/);
+    assert.match(Q, new RegExp(`from\\(bucket: "${influxConfig.bucket}"\\)`));
   });
 
   test('scopes query to the correct range window', () => {
@@ -101,7 +102,7 @@ describe('buildTimeSeriesQuery — path_as_measurement schema (default)', () => 
   const Q = buildTimeSeriesQuery('environment.outside.pressure', '12h', '15m');
 
   test('uses the configured bucket name', () => {
-    assert.match(Q, /from\(bucket: "Hebe"\)/);
+    assert.match(Q, new RegExp(`from\\(bucket: "${influxConfig.bucket}"\\)`));
   });
 
   test('scopes query to the correct range window', () => {

@@ -3,11 +3,11 @@
 ## Project Purpose
 
 BYOS (Bring-Your-Own-Server) API for a [TRMNL](https://usetrmnl.com/) e-ink display mounted aboard
-sailing vessel **HEBE**. Runs on a Raspberry Pi named **hebepi** (192.168.1.x, port 3001).
+a sailing vessel. Runs on a Raspberry Pi on the vessel's local network (port 3001).
 
 **Data pipeline:**
 ```
-SignalK → InfluxDB 2.x (hebepi:8086) → HTML render (800×480) → Puppeteer PNG → ImageMagick → TRMNL device
+SignalK → InfluxDB 2.x (localhost:8086) → HTML render (800×480) → Puppeteer PNG → ImageMagick → TRMNL device
 ```
 
 ---
@@ -26,8 +26,8 @@ node src/server.js
 # Check ImageMagick is available
 which convert
 
-# Inspect InfluxDB connection
-curl -s http://hebepi:8086/health
+# Inspect InfluxDB connection (replace with your host)
+curl -s http://localhost:8086/health
 ```
 
 ---
@@ -158,7 +158,7 @@ export const mps_to_kts = (v) => v * 1.94384;
 
 ## InfluxDB
 
-- **URL:** `http://hebepi:8086` | **org:** `Hebe` | **bucket:** `Hebe` | **orgID:** `718b491b0ca68e0e`
+- **InfluxDB:** configurable via `config.yaml` (`influxdb.url`, `influxdb.org`, `influxdb.bucket`)
 - **Token:** `INFLUXDB_TOKEN` env var (never hardcode)
 - **Schema:** `path_as_measurement` — measurement = SignalK path, field = `"value"`
 - `queryStats(metrics)` → `{ [skPath]: { min, max, mean, last } }`

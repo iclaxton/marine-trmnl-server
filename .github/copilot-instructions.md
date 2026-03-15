@@ -3,12 +3,12 @@
 ## Project Purpose
 
 This is a **BYOS (Bring-Your-Own-Server) API** for a [TRMNL](https://usetrmnl.com/) e-ink display device
-mounted aboard a sailing boat (vessel: **HEBE**). It runs on a Raspberry Pi named **hebepi** (192.168.1.x).
+mounted aboard a sailing boat. It runs on a Raspberry Pi on the vessel's local network.
 
 **Data pipeline:**
 ```
 SignalK (boat sensors)
-  → InfluxDB 2.x  (hebepi:8086, org: "Hebe", bucket: "Hebe")
+  → InfluxDB 2.x  (localhost:8086)
   → HTML render   (src/renderer.js — 800×480 CSS grid dashboard)
   → Puppeteer     (headless Chrome screenshot → PNG)
   → ImageMagick   (PNG → BMP3 monochrome OR 4-level grayscale PNG)
@@ -30,7 +30,7 @@ SignalK (boat sensors)
 - **Screenshot:** puppeteer-core v24 (headless Chrome)
 - **Image conversion:** ImageMagick CLI (`convert` command — not a Node package)
 - **InfluxDB:** `@influxdata/influxdb-client`
-- **InfluxDB org/bucket:** `Hebe` / `Hebe` (orgID: `718b491b0ca68e0e`)
+- **InfluxDB org/bucket:** configurable via `config.yaml` (`influxdb.org` / `influxdb.bucket`)
 - **Config:** `js-yaml` parsing `config.yaml`; secrets via `dotenv` from `.env`
 - **Tests:** `node:test` built-in only — no Jest, Mocha, Vitest, or any other test framework
 
@@ -196,10 +196,10 @@ server:
   host: "0.0.0.0"
 
 influxdb:
-  url: "http://hebepi:8086"
+  url: "http://localhost:8086"
   token: "${INFLUXDB_TOKEN}"       # from .env
-  org: "Hebe"
-  bucket: "Hebe"
+  org: "my-org"
+  bucket: "signalk"
   schema: "path_as_measurement"   # SignalK→InfluxDB v1 plugin format
 
 display:
