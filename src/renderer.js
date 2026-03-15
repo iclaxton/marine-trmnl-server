@@ -430,15 +430,15 @@ body{
 .wind-top{display:flex;align-items:center;gap:10px;margin-bottom:8px}
 .wind-compass{flex-shrink:0}
 .wind-primary{flex:1}
-.wind-speed-group,.wind-angle-group{display:flex;align-items:center;gap:4px;margin-bottom:4px;flex-wrap:wrap}
-.big-label{font-size:9px;font-weight:700;letter-spacing:0.1em;color:${text2};width:28px}
+.wind-speed-group,.wind-angle-group{display:flex;align-items:center;gap:4px;margin-bottom:4px;white-space:nowrap;overflow:hidden}
+.big-label{font-size:9px;font-weight:700;letter-spacing:0.1em;color:${text2};width:28px;flex-shrink:0}
 .big-value{font-size:36px;font-weight:300;letter-spacing:-0.02em;font-variant-numeric:tabular-nums}
 .big-unit{font-size:14px;color:${text1};margin-left:2px}
-.medium-value{font-size:24px;letter-spacing:0}
+.medium-value{font-size:20px;letter-spacing:0;flex-shrink:1}
 
 .side-badge{
-  font-size:9px;font-weight:700;letter-spacing:0.08em;padding:2px 5px;
-  border:1px solid ${border};border-radius:3px;margin-left:4px;
+  font-size:9px;font-weight:700;letter-spacing:0.05em;padding:2px 4px;
+  border:1px solid ${border};border-radius:3px;margin-left:2px;flex-shrink:0;white-space:nowrap;
 }
 .side-badge.stbd{background:transparent;color:${stbdColor};border-color:${stbdColor}}
 .side-badge.port{background:transparent;color:${portColor};border-color:${portColor}}
