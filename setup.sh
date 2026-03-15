@@ -330,9 +330,78 @@ mkdir -p screens
 success "screens/ directory ready ✓"
 echo ""
 
-# ── Step 7: Service installation ──────────────────────────────────────────────
+# ── Step 7: Test InfluxDB connection ───────────────────────────────────────────
 
-echo -e "${BOLD}── Step 7: Install as a system service ──────────────────────${RESET}"
+echo -e "${BOLD}── Step 7: Test InfluxDB connection ───────────────────────${RESET}"
+
+# Source .env to get the latest values (may have been kept from a prior run)
+_INFLUXDB_URL=""
+_INFLUXDB_TOKEN=""
+_INFLUXDB_ORG=""
+_INFLUXDB_BUCKET=""
+if [[ -f .env ]]; then
+  while IFS='=' read -r key val; do
+    [[ "$key" =~ ^# ]] && continue
+    [[ -z "$key" ]] && continue
+    val="${val%%#*}"      # strip inline comments
+    val="${val//\"/}"     # strip quotes
+    val="${val// /}"      # trim spaces
+    case "$key" in
+      INFLUXDB_URL)    _INFLUXDB_URL="$val" ;;
+      INFLUXDB_TOKEN)  _INFLUXDB_TOKEN="$val" ;;
+      INFLUXDB_ORG)    _INFLUXDB_ORG="$val" ;;
+      INFLUXDB_BUCKET) _INFLUXDB_BUCKET="$val" ;;
+    esac
+  done < .env
+fi
+
+# Fall back to values entered this session if .env wasn't (re)written
+_INFLUXDB_URL="${_INFLUXDB_URL:-${INFLUXDB_URL:-http://localhost:8086}}"
+_INFLUXDB_TOKEN="${_INFLUXDB_TOKEN:-${INFLUXDB_TOKEN:-}}"
+_INFLUXDB_ORG="${_INFLUXDB_ORG:-${INFLUXDB_ORG:-}}"
+_INFLUXDB_BUCKET="${_INFLUXDB_BUCKET:-${INFLUXDB_BUCKET:-}}"
+
+info "Testing connection to ${_INFLUXDB_URL}…"
+
+_INFLUX_OK=false
+if [[ -z "${_INFLUXDB_TOKEN}" ]]; then
+  warn "INFLUXDB_TOKEN is empty — skipping connection test."
+elif ! command_exists curl; then
+  warn "curl not found — skipping connection test."
+else
+  _HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+    --max-time 5 \
+    -H "Authorization: Token ${_INFLUXDB_TOKEN}" \
+    "${_INFLUXDB_URL}/api/v2/buckets?name=${_INFLUXDB_BUCKET}&org=${_INFLUXDB_ORG}" 2>/dev/null || echo "000")
+
+  if [[ "$_HTTP_STATUS" == "200" ]]; then
+    success "InfluxDB connection OK (HTTP 200) ✓"
+    _INFLUX_OK=true
+  elif [[ "$_HTTP_STATUS" == "000" ]]; then
+    warn "Could not reach InfluxDB at ${_INFLUXDB_URL} (connection refused or timeout)."
+    warn "Check that InfluxDB is running and INFLUXDB_URL is correct in .env"
+  elif [[ "$_HTTP_STATUS" == "401" ]]; then
+    warn "InfluxDB returned 401 Unauthorized — check your INFLUXDB_TOKEN in .env"
+  elif [[ "$_HTTP_STATUS" == "404" ]]; then
+    warn "InfluxDB returned 404 — check INFLUXDB_ORG and INFLUXDB_BUCKET in .env"
+  else
+    warn "InfluxDB returned unexpected HTTP ${_HTTP_STATUS} from ${_INFLUXDB_URL}"
+  fi
+fi
+
+if [[ "$_INFLUX_OK" == "false" ]]; then
+  echo ""
+  if ! prompt_yesno "Continue setup anyway?" "y"; then
+    echo ""
+    info "Edit .env with correct InfluxDB credentials, then re-run: bash setup.sh"
+    exit 1
+  fi
+fi
+echo ""
+
+# ── Step 8: Service installation ───────────────────────────────────────────────
+
+echo -e "${BOLD}── Step 8: Install as a system service ────────────────────${RESET}"
 echo "  This will start the server automatically on boot."
 echo ""
 
