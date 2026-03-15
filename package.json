@@ -1,0 +1,27 @@
+{
+  "name": "marine-trmnl-server",
+  "version": "1.0.0",
+  "description": "Marine dashboard server for TRMNL e-ink display, powered by SignalK + InfluxDB",
+  "main": "src/server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "test": "node --test test/unit/utils.test.js test/unit/devices.test.js test/integration/app.test.js",
+    "test:unit": "node --test test/unit/utils.test.js test/unit/devices.test.js",
+    "test:integration": "node --test test/integration/app.test.js",
+    "test:watch": "node --test --watch test/unit/utils.test.js test/unit/devices.test.js test/integration/app.test.js"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "dependencies": {
+    "@influxdata/influxdb-client": "^1.35.0",
+    "dotenv": "^16.4.5",
+    "fastify": "^5.2.1",
+    "js-yaml": "^4.1.0",
+    "puppeteer-core": "^24.0.0"
+  },
+  "keywords": ["marine", "trmnl", "signalk", "influxdb", "raspberry-pi", "e-ink"],
+  "license": "MIT"
+}
