@@ -85,9 +85,22 @@ export function createApp({ deps, paths, cfg, initialState = {} } = {}) {
   const DASHBOARD_FILE = `dashboard${ext}`;
   const SETUP_FILE     = `setup${ext}`;
 
-  function screenUrl(filename) {
-    const base = (byosConfig?.baseUrl ?? `http://localhost:${serverConfig?.port ?? 3001}`)
+  /**
+   * Build an absolute URL for a generated screen file.
+   * When the configured baseUrl points to localhost (i.e. BYOS_BASE_URL was not
+   * set), fall back to the Host header of the incoming request so the TRMNL
+   * device always receives a URL it can actually reach.
+   * @param {string} filename
+   * @param {import('fastify').FastifyRequest} [request]
+   * @returns {string}
+   */
+  function screenUrl(filename, request) {
+    let base = (byosConfig?.baseUrl ?? `http://localhost:${serverConfig?.port ?? 3001}`)
       .replace(/\/$/, '');
+    if (request && /^https?:\/\/localhost(:\d+)?$/.test(base)) {
+      const proto = request.protocol ?? 'http';
+      base = `${proto}://${request.headers.host}`;
+    }
     return `${base}/screens/${filename}`;
   }
 
@@ -194,7 +207,7 @@ export function createApp({ deps, paths, cfg, initialState = {} } = {}) {
     return reply.send({
       api_key:     device.apiKey,
       friendly_id: device.friendlyId,
-      image_url:   dashboardReady ? screenUrl(DASHBOARD_FILE) : screenUrl(SETUP_FILE),
+      image_url:   dashboardReady ? screenUrl(DASHBOARD_FILE, request) : screenUrl(SETUP_FILE, request),
       message:     `Welcome aboard ${vesselConfig.name}`,
     });
   });
@@ -215,7 +228,7 @@ export function createApp({ deps, paths, cfg, initialState = {} } = {}) {
       if (!refreshRunning) buildDashboard().catch(err => fastify.log.error({ err }, 'Dashboard build failed'));
       return reply.send({
         filename:          SETUP_FILE,
-        image_url:         screenUrl(SETUP_FILE),
+        image_url:         screenUrl(SETUP_FILE, request),
         image_url_timeout: 0,
         refresh_rate:      60,
         reset_firmware:    false,
@@ -225,7 +238,7 @@ export function createApp({ deps, paths, cfg, initialState = {} } = {}) {
 
     return reply.send({
       filename:          DASHBOARD_FILE,
-      image_url:         screenUrl(DASHBOARD_FILE),
+      image_url:         screenUrl(DASHBOARD_FILE, request),
       image_url_timeout: 0,
       refresh_rate:      displayConfig.refreshIntervalSeconds,
       reset_firmware:    false,
