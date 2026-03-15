@@ -2,7 +2,7 @@
 FROM node:20-bookworm-slim AS deps
 
 WORKDIR /app
-COPY package.json ./
+COPY package.json package-lock.json ./
 RUN npm ci --omit=dev
 
 # ── Runtime stage ─────────────────────────────────────────────────────────────
@@ -28,6 +28,6 @@ COPY config.yaml ./
 # Create writable directories (overridden by volume mounts at runtime)
 RUN mkdir -p screens data
 
-EXPOSE 3001
+EXPOSE 3002
 
 CMD ["node", "src/server.js"]
