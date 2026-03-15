@@ -2,8 +2,11 @@ name: Docker
 
 on:
   push:
-    branches: [main]
     tags: ['v*.*.*']
+  workflow_run:
+    workflows: [CI]
+    branches: [main]
+    types: [completed]
 
 env:
   REGISTRY: ghcr.io
@@ -13,6 +16,9 @@ env:
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
+    # For branch pushes: only run when the CI workflow completed successfully.
+    # For tag pushes: github.event_name == 'push', so the condition is always true.
+    if: github.event_name == 'push' || github.event.workflow_run.conclusion == 'success'
     permissions:
       contents: read
       packages: write
