@@ -27,7 +27,9 @@ const CHROMIUM_ARGS = [
   '--disable-gpu',
   '--disable-software-rasterizer',
   '--run-all-compositor-stages-before-draw',
-  '--virtual-time-budget=5000',
+  // Note: --virtual-time-budget must NOT be used here — it causes Chromium to
+  // close the page session before Puppeteer can call screenshot(), producing
+  // "Protocol error (Emulation.setTouchEmulationEnabled): Session closed."
 ];
 
 function resolveChromiumPath() {
