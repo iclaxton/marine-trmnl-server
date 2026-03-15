@@ -7,8 +7,9 @@
  */
 
 import puppeteer from 'puppeteer-core';
-import { platform } from 'node:os';
-import { existsSync } from 'node:fs';
+import { platform, tmpdir } from 'node:os';
+import { existsSync, writeFileSync, unlinkSync, mkdtempSync, rmdirSync } from 'node:fs';
+import { join } from 'node:path';
 import { byosConfig } from './config.js';
 
 const WIDTH = 800;
@@ -72,8 +73,6 @@ export async function screenshotHtml(html, outputPath) {
   const browser = await puppeteer.launch({
     executablePath,
     args: CHROMIUM_ARGS,
-    // Use new headless mode (supported by Chromium 112+, including Pi Chromium 126).
-    // 'shell' uses --headless=old which behaves poorly on Chromium 126.
     headless: true,
     // null disables Puppeteer's CDP-based viewport management entirely,
     // avoiding Emulation.setTouchEmulationEnabled calls that crash on Pi.
@@ -81,14 +80,20 @@ export async function screenshotHtml(html, outputPath) {
     timeout: SCREENSHOT_TIMEOUT_MS,
   });
 
+  // Write HTML to a temp file and navigate with page.goto('file://...').
+  // page.setContent() uses Runtime.callFunctionOn internally; page.goto() uses
+  // the Page navigation protocol which is far more compatible with Pi Chromium.
+  const tmpDir = mkdtempSync(join(tmpdir(), 'trmnl-'));
+  const tmpFile = join(tmpDir, 'dashboard.html');
+
   try {
+    writeFileSync(tmpFile, html, 'utf8');
+
     const page = await browser.newPage();
+    // Do NOT call page.setJavaScriptEnabled() — it uses Emulation.setScriptExecutionDisabled
+    // which also crashes on Pi.
 
-    // Our dashboard is pure HTML + inline CSS + inline SVG — no JS needed.
-    // Disabling JS speeds up rendering and avoids any accidental network calls.
-    await page.setJavaScriptEnabled(false);
-
-    await page.setContent(html, { waitUntil: 'load', timeout: SCREENSHOT_TIMEOUT_MS });
+    await page.goto(`file://${tmpFile}`, { waitUntil: 'load', timeout: SCREENSHOT_TIMEOUT_MS });
 
     await page.screenshot({
       path: outputPath,
@@ -98,5 +103,7 @@ export async function screenshotHtml(html, outputPath) {
     });
   } finally {
     await browser.close();
+    try { unlinkSync(tmpFile); } catch { /* ignore */ }
+    try { rmdirSync(tmpDir); } catch { /* ignore */ }
   }
 }
