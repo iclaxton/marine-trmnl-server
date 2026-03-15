@@ -25,9 +25,14 @@ function statsLine(stats, decimals, unit = '') {
 }
 
 /** Wind direction SVG arrow (compass-style, 80×80) */
-function windArrowSvg(angleDeg, isDark) {
+function windArrowSvg(angleDeg, isDark, bitDepth = 1) {
   const strokeColor = isDark ? '#fff' : '#000';
-  const fillColor   = isDark ? '#333' : '#e8e8e8';
+  // For 2-bit e-ink use an intermediate value so Floyd-Steinberg dithers it
+  // into a light mix of #aaaaaa and #ffffff — lighter than solid #aaaaaa.
+  // Light mode: #555555 (dark grey) so the circle is visible against the black page.
+  const fillColor   = bitDepth >= 2
+    ? (isDark ? '#555555' : '#dddddd')
+    : (isDark ? '#333' : '#e8e8e8');
   const angle       = (angleDeg ?? 0);
   // Arrow points in the direction the wind is coming FROM
   return `<svg width="88" height="88" viewBox="0 0 88 88" xmlns="http://www.w3.org/2000/svg">
@@ -41,15 +46,14 @@ function windArrowSvg(angleDeg, isDark) {
     const y2 = 44 - r  * Math.cos(a * Math.PI / 180);
     return `<line x1="${x1.toFixed(1)}" y1="${y1.toFixed(1)}" x2="${x2.toFixed(1)}" y2="${y2.toFixed(1)}" stroke="${strokeColor}" stroke-width="1.5"/>`;
   }).join('')}
-  <!-- Cardinal labels -->
-  <text x="44" y="10" text-anchor="middle" font-size="9" font-family="system-ui,sans-serif" fill="${strokeColor}" font-weight="700">N</text>
-  <text x="78" y="47" text-anchor="middle" font-size="9" font-family="system-ui,sans-serif" fill="${strokeColor}">E</text>
-  <text x="44" y="83" text-anchor="middle" font-size="9" font-family="system-ui,sans-serif" fill="${strokeColor}">S</text>
-  <text x="10" y="47" text-anchor="middle" font-size="9" font-family="system-ui,sans-serif" fill="${strokeColor}">W</text>
+  <!-- Cardinal labels — inset ~12px from rim -->
+  <text x="44" y="18" text-anchor="middle" font-size="9" font-family="system-ui,sans-serif" fill="${strokeColor}" font-weight="700">N</text>
+  <text x="72" y="47" text-anchor="middle" font-size="9" font-family="system-ui,sans-serif" fill="${strokeColor}">E</text>
+  <text x="44" y="75" text-anchor="middle" font-size="9" font-family="system-ui,sans-serif" fill="${strokeColor}">S</text>
+  <text x="18" y="47" text-anchor="middle" font-size="9" font-family="system-ui,sans-serif" fill="${strokeColor}">W</text>
   <!-- Direction arrow -->
   <g transform="rotate(${angle}, 44, 44)">
-    <polygon points="44,12 48,44 44,38 40,44" fill="${strokeColor}" opacity="0.9"/>
-    <polygon points="44,76 48,44 44,50 40,44" fill="${strokeColor}" opacity="0.3"/>
+    <polygon points="44,12 48,44 44,38 40,44" fill="${strokeColor}"/>
   </g>
   <circle cx="44" cy="44" r="4" fill="${strokeColor}"/>
 </svg>`;
@@ -74,7 +78,7 @@ function metricRow(label, value, unit, decimals, stats, cls = '') {
  * @param {boolean} isDark
  * @returns {string} — SVG element string, or a "no data" span
  */
-function pressureSparklineSvg(series, isDark) {
+function pressureSparklineSvg(series, isDark, bitDepth = 1) {
   const W = 234, H = 58;
   if (!series || series.length < 2) {
     return `<span class="no-data">no history</span>`;
@@ -101,15 +105,26 @@ function pressureSparklineSvg(series, isDark) {
   // Close path to baseline for the filled area
   const fillPts = `1,${H} ${pts} ${lastX},${H}`;
 
-  const stroke    = isDark ? '#c0c0c0' : '#444444';
-  const fillCol   = isDark ? 'rgba(192,192,192,0.10)' : 'rgba(0,0,0,0.07)';
-  const dotFill   = isDark ? '#ffffff' : '#000000';
-  const baseColor = isDark ? '#333333' : '#dddddd';
-  const lblColor  = isDark ? '#555555' : '#aaaaaa';
+  // For 2-bit e-ink only exact palette colours are safe — any non-palette value
+  // (including semi-transparent fills) gets Floyd-Steinberg dithered into spots.
+  // In 2-bit mode we use no fill (none) for the area under the sparkline so the
+  // line itself reads cleanly; the rgba fills are fine for the browser preview.
+  const is2bit      = bitDepth === 2;
+  const stroke      = is2bit
+    ? (isDark ? '#aaaaaa' : '#555555')
+    : (isDark  ? '#c0c0c0' : '#444444');
+  const fillCol     = is2bit
+    ? (isDark ? '#555555' : '#dddddd')   // dithered to light #aaaaaa/#ffffff mix
+    : (isDark ? 'rgba(192,192,192,0.10)' : 'rgba(0,0,0,0.07)');
+  const dotFill     = isDark ? '#ffffff' : '#000000';
+  const baseColor   = is2bit ? (isDark ? '#555555' : '#aaaaaa') : (isDark ? '#333333' : '#dddddd');
+  const lblColor    = isDark ? '#555555' : '#aaaaaa';
+
+  const fillPolygon = `<polygon points="${fillPts}" fill="${fillCol}" stroke="none"/>`;
 
   return `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">
   <line x1="1" y1="${H - 1}" x2="${W - 1}" y2="${H - 1}" stroke="${baseColor}" stroke-width="0.5"/>
-  <polygon points="${fillPts}" fill="${fillCol}" stroke="none"/>
+  ${fillPolygon}
   <polyline points="${pts}" fill="none" stroke="${stroke}" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/>
   <circle cx="${lastX}" cy="${lastY}" r="2.5" fill="${dotFill}"/>
   <text x="2" y="${H - 2}" font-size="7" font-family="system-ui,sans-serif" fill="${lblColor}">12h</text>
@@ -117,7 +132,7 @@ function pressureSparklineSvg(series, isDark) {
 </svg>`;
 }
 
-function renderWind(data, isDark) {
+function renderWind(data, isDark, bitDepth = 1) {
   if (!metricsConfig.wind?.enabled || !data.wind) {
     return `<section class="panel panel-wind"><div class="panel-title">WIND</div><div class="no-data">disabled</div></section>`;
   }
@@ -147,7 +162,7 @@ function renderWind(data, isDark) {
   const pressHtml  = pressEntry
     ? `<div class="press-section">
   <div class="stat-header">PRESSURE · 12h (hPa)</div>
-  <div class="press-chart">${pressureSparklineSvg(pressEntry.series, isDark)}</div>
+  <div class="press-chart">${pressureSparklineSvg(pressEntry.series, isDark, bitDepth)}</div>
   <div class="stat-block">
     <div class="stat-header">min/avg/max</div>
     <div class="stat-row">${statsLine(pressEntry.stats, 0)}</div>
@@ -158,7 +173,7 @@ function renderWind(data, isDark) {
   return `<section class="panel panel-wind">
   <div class="panel-title">WIND</div>
   <div class="wind-top">
-    <div class="wind-compass">${windArrowSvg(arrowAngle, isDark)}</div>
+    <div class="wind-compass">${windArrowSvg(arrowAngle, isDark, bitDepth)}</div>
     <div class="wind-primary">
       <div class="wind-speed-group">
         <span class="big-label">AWS</span>
@@ -333,17 +348,26 @@ function renderEnvironment(data) {
 // ─── CSS ─────────────────────────────────────────────────────────────────────
 
 function buildCss(isDark, bitDepth = 1) {
+  const is2bit = bitDepth >= 2;
   const bg0   = isDark ? '#0a0a0a' : '#ffffff';
   const bg1   = isDark ? '#141414' : '#f8f8f8';
-  // In 2-bit mode map colours to the 4 available display levels (0/85/170/255)
-  const bg2   = bitDepth >= 2 ? (isDark ? '#404040' : '#d0d0d0') : (isDark ? '#1e1e1e' : '#f0f0f0');
-  const text0 = isDark ? '#f2f2f2' : '#0a0a0a';
-  const text1 = isDark ? '#c0c0c0' : '#333333';
-  const text2 = isDark ? '#808080' : '#666666';
-  const border= isDark ? '#2e2e2e' : '#d8d8d8';
-  const good  = bitDepth >= 2 ? (isDark ? '#b0b0b0' : '#505050') : (isDark ? '#66bb6a' : '#1b6b1f');
-  const warn  = bitDepth >= 2 ? (isDark ? '#707070' : '#a0a0a0') : (isDark ? '#ffa726' : '#a0620b');
-  const alert = bitDepth >= 2 ? (isDark ? '#ffffff' : '#000000') : (isDark ? '#ef5350' : '#b71c1c');
+  // In 2-bit mode snap colours to the 4 available e-ink palette levels (0/85/170/255)
+  // to avoid Floyd-Steinberg dithering on solid UI elements.
+  const bg2   = is2bit ? (isDark ? '#000000' : '#aaaaaa') : (isDark ? '#1e1e1e' : '#f0f0f0');
+  const text0 = is2bit ? (isDark ? '#ffffff' : '#000000') : (isDark ? '#f2f2f2' : '#0a0a0a');
+  const text1 = is2bit ? (isDark ? '#aaaaaa' : '#555555') : (isDark ? '#c0c0c0' : '#333333');
+  const text2 = is2bit ? (isDark ? '#555555' : '#aaaaaa') : (isDark ? '#808080' : '#666666');
+  const border= is2bit ? (isDark ? '#555555' : '#aaaaaa') : (isDark ? '#2e2e2e' : '#d8d8d8');
+  const good  = is2bit ? (isDark ? '#aaaaaa' : '#555555') : (isDark ? '#66bb6a' : '#1b6b1f');
+  const warn  = is2bit ? (isDark ? '#555555' : '#aaaaaa') : (isDark ? '#ffa726' : '#a0620b');
+  const alert = is2bit ? (isDark ? '#ffffff' : '#000000') : (isDark ? '#ef5350' : '#b71c1c');
+  // Badge colours snapped to palette for 2-bit (colours become arbitrary greys at 4 levels)
+  const stbdColor = is2bit ? (isDark ? '#aaaaaa' : '#555555') : (isDark ? '#66bb6a' : '#1b6b1f');
+  const portColor = is2bit ? (isDark ? '#ffffff' : '#000000') : (isDark ? '#ef5350' : '#b71c1c');
+  // Footer background
+  const footerBg  = is2bit ? (isDark ? '#000000' : '#ffffff') : (isDark ? '#000' : '#f4f4f4');
+  // Font smoothing — grayscale mode maps cleanly to the 4-level palette; avoid subpixel RGB
+  const fontSmoothing = is2bit ? '-webkit-font-smoothing:grayscale;-moz-osx-font-smoothing:grayscale;' : '';
 
   return `
 *{box-sizing:border-box;margin:0;padding:0}
@@ -352,6 +376,7 @@ body{
   background:${bg0};color:${text0};
   font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;
   font-size:12px;line-height:1.3;
+  ${fontSmoothing}
 }
 
 /* ── Header ── */
@@ -408,8 +433,8 @@ body{
   font-size:9px;font-weight:700;letter-spacing:0.08em;padding:2px 5px;
   border:1px solid ${border};border-radius:3px;margin-left:4px;
 }
-.side-badge.stbd{background:transparent;color:${isDark?'#66bb6a':'#1b6b1f'};border-color:${isDark?'#66bb6a':'#1b6b1f'}}
-.side-badge.port{background:transparent;color:${isDark?'#ef5350':'#b71c1c'};border-color:${isDark?'#ef5350':'#b71c1c'}}
+.side-badge.stbd{background:transparent;color:${stbdColor};border-color:${stbdColor}}
+.side-badge.port{background:transparent;color:${portColor};border-color:${portColor}}
 
 .wind-true{
   display:flex;align-items:center;gap:6px;
@@ -483,7 +508,7 @@ body{
 .footer{
   display:flex;justify-content:space-between;align-items:center;
   height:24px;padding:0 14px;
-  background:${isDark?'#000':'#f4f4f4'};
+  background:${footerBg};
   border-top:1px solid ${border};
   font-size:9.5px;color:${text2};font-variant-numeric:tabular-nums;
 }
@@ -509,7 +534,7 @@ export function renderDashboard(data, { bitDepth = 1 } = {}) {
   const timeStr  = now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
   const dateStr  = now.toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric' });
 
-  const windHtml = renderWind(data, isDark);
+  const windHtml = renderWind(data, isDark, bitDepth);
   const navHtml  = renderNavigation(data);
   const depHtml  = renderDepth(data);
   const batHtml  = renderBattery(data);

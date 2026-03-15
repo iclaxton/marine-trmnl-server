@@ -18,12 +18,15 @@ const CONFIG_PATH = resolve(__dirname, '../config.yaml');
  */
 function interpolateEnv(value) {
   if (typeof value === 'string') {
-    return value.replace(/\$\{([^}]+)\}/g, (_, name) => {
+    return value.replace(/\$\{([^}]+)\}/g, (_, expr) => {
+      const sepIdx = expr.indexOf(':-');
+      const name = sepIdx === -1 ? expr : expr.slice(0, sepIdx);
+      const fallback = sepIdx === -1 ? undefined : expr.slice(sepIdx + 2);
       const envVal = process.env[name];
-      if (envVal === undefined) {
+      if (envVal === undefined && fallback === undefined) {
         throw new Error(`Config references undefined env variable: ${name}`);
       }
-      return envVal;
+      return envVal !== undefined ? envVal : fallback;
     });
   }
   if (Array.isArray(value)) return value.map(interpolateEnv);

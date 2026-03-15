@@ -42,6 +42,16 @@ const { fastify, initialize } = createApp({
   cfg: { byosConfig, serverConfig, displayConfig, vesselConfig },
 });
 
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('Unhandled promise rejection:', reason);
+  process.exit(1);
+});
+
+process.on('uncaughtException', (err) => {
+  console.error('Uncaught exception:', err);
+  process.exit(1);
+});
+
 async function start() {
   try {
     await initialize();

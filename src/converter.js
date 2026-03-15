@@ -12,6 +12,9 @@
 
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { rmSync } from 'node:fs';
 
 const execFileAsync = promisify(execFile);
 
@@ -54,6 +57,7 @@ export async function pngToBmp3(inputPng, outputBmp) {
 
   const args = [
     inputPng,
+    '-resize', '800x480!',  // Downsample the 2x supersampled screenshot before 1-bit conversion
     '-monochrome',    // Convert to true 1-bit B&W
     '-colors', '2',   // Enforce exactly 2 colours
     '-depth', '1',    // 1 bit per pixel
@@ -110,8 +114,11 @@ export async function toDisplayImage(inputPng, outputPath, bitDepth = 1) {
 /**
  * Convert a PNG to a 2-bit (4-level) grayscale PNG for TRMNL OG 2-bit displays.
  *
- * Uses Floyd-Steinberg error-diffusion dithering to distribute quantisation
- * error across the 4 display levels (black, dark-grey, light-grey, white).
+ * Uses the official TRMNL approach:
+ *   1. Build an exact 4-entry palette PNG (0/85/170/255) via ImageMagick
+ *   2. Remap the source image to that palette with Floyd-Steinberg dithering
+ *
+ * Reference: https://docs.trmnl.com/go/diy/imagemagick-guide
  *
  * @param {string} inputPng  — source PNG
  * @param {string} outputPng — destination PNG
@@ -119,19 +126,31 @@ export async function toDisplayImage(inputPng, outputPath, bitDepth = 1) {
  */
 async function pngTo2BitGrayscale(inputPng, outputPng) {
   const cmd = await resolveImageMagickCommand();
-
-  const args = [
-    inputPng,
-    '-colorspace', 'Gray',       // Convert to luminance grayscale
-    '-dither', 'FloydSteinberg', // Error-diffusion dither for best 4-level quality
-    '-colors', '4',              // Exactly 4 levels: black, dark-grey, light-grey, white
-    '-depth', '2',               // 2 bits per pixel in the output file
-    outputPng,
-  ];
+  const colormapPath = join(tmpdir(), `trmnl-colormap-${process.pid}.png`);
 
   try {
-    await execFileAsync(cmd, args);
+    // Step 1: build the exact TRMNL 4-level palette PNG
+    await execFileAsync(cmd, [
+      '-size', '4x1',
+      'xc:#000000', 'xc:#555555', 'xc:#aaaaaa', 'xc:#ffffff',
+      '+append',
+      '-type', 'Palette',
+      colormapPath,
+    ]);
+
+    // Step 2: resize (downsample 2x supersampled screenshot) then remap to palette
+    await execFileAsync(cmd, [
+      inputPng,
+      '-resize', '800x480!',
+      '-dither', 'FloydSteinberg',
+      '-remap', colormapPath,
+      '-define', 'png:bit-depth=2',
+      '-define', 'png:color-type=0',
+      outputPng,
+    ]);
   } catch (err) {
     throw new Error(`ImageMagick 2-bit grayscale conversion failed: ${err.message}`);
+  } finally {
+    try { rmSync(colormapPath); } catch { /* ignore if not created */ }
   }
 }

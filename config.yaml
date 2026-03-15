@@ -13,10 +13,9 @@ byos:
   baseUrl: "http://<your-pi-ip>:3001"
 
   # Absolute path to Chromium/Chrome executable for headless screenshots.
-  # Raspberry Pi (after: sudo apt install chromium-browser):
-  chromiumPath: "/usr/bin/chromium-browser"
-  # macOS (uncomment if developing locally):
-  # chromiumPath: "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+  # Defaults to the Raspberry Pi path; override via CHROMIUM_PATH in .env for local dev.
+  # e.g. CHROMIUM_PATH=/Applications/Brave Browser 3.app/Contents/MacOS/Brave Browser
+  chromiumPath: "${CHROMIUM_PATH:-/usr/bin/chromium-browser}"
 
   # Directory to store generated BMP/PNG screen files.
   # A relative path is resolved from the project root.
@@ -24,7 +23,7 @@ byos:
 
 # --- Vessel ---
 vessel:
-  name: "MY BOAT"              # Display name shown in the header
+  name: "${VESSEL_NAME:-MY BOAT}"              # Display name shown in the header
 
 # --- Server ---
 server:
@@ -33,10 +32,10 @@ server:
 
 # --- InfluxDB 2.x ---
 influxdb:
-  url: "http://localhost:8086"
+  url: "${INFLUXDB_URL:-http://localhost:8086}"
   token: "${INFLUXDB_TOKEN}"      # Set in .env
-  org: "my-org"
-  bucket: "signalk"
+  org: "${INFLUXDB_ORG:-my-org}"
+  bucket: "${INFLUXDB_BUCKET:-signalk}"
 
   # Schema used by your SignalK→InfluxDB plugin.
   # "path_as_measurement" : measurement = SK path, field = "value"  (signalk-to-influxdb v1)
@@ -142,7 +141,7 @@ metrics:
         currentPath: "electrical.batteries.house.current"
       - id: "start"
         label: "Start"
-        voltagePath: "electrical.batteries.start.voltage"
+        voltagePath: "electrical.batteries.starter.voltage"
         currentPath: ~          # null = not monitored
 
   environment:

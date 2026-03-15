@@ -10,7 +10,10 @@ import puppeteer from 'puppeteer-core';
 import { platform } from 'node:os';
 import { byosConfig } from './config.js';
 
-const VIEWPORT = { width: 800, height: 480, deviceScaleFactor: 1 };
+const VIEWPORT = { width: 800, height: 480, deviceScaleFactor: 2 };
+
+/** Hard timeout (ms) for the entire screenshot operation */
+const SCREENSHOT_TIMEOUT_MS = 30_000;
 
 /**
  * Chromium launch flags tuned for Raspberry Pi 4 / headless Linux.
@@ -28,15 +31,19 @@ const CHROMIUM_ARGS = [
 ];
 
 function resolveChromiumPath() {
+  // CHROMIUM_PATH env var takes highest priority — useful for local dev
+  // without modifying config.yaml (set it in .env).
+  if (process.env.CHROMIUM_PATH) return process.env.CHROMIUM_PATH;
+
   const configured = byosConfig?.chromiumPath;
   if (configured) return configured;
 
-  // Auto-detect by OS as a fallback
+  // Auto-detect by OS as a final fallback
   if (platform() === 'linux')  return '/usr/bin/chromium-browser';
   if (platform() === 'darwin') return '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 
   throw new Error(
-    'Cannot auto-detect Chromium. Set byos.chromiumPath in config.yaml'
+    'Cannot auto-detect Chromium. Set CHROMIUM_PATH in .env or byos.chromiumPath in config.yaml'
   );
 }
 
@@ -56,6 +63,7 @@ export async function screenshotHtml(html, outputPath) {
     headless: true,
     // Avoid sandbox issues when running as root (e.g. in Docker or some Pi setups)
     ignoreDefaultArgs: ['--disable-extensions'],
+    timeout: SCREENSHOT_TIMEOUT_MS,
   });
 
   try {
@@ -69,12 +77,12 @@ export async function screenshotHtml(html, outputPath) {
 
     // Load the HTML string directly (no temp file needed).
     // 'networkidle0' would wait for network, 'load' fires when DOM is ready.
-    await page.setContent(html, { waitUntil: 'load' });
+    await page.setContent(html, { waitUntil: 'load', timeout: SCREENSHOT_TIMEOUT_MS });
 
     await page.screenshot({
       path: outputPath,
       type: 'png',
-      clip: { x: 0, y: 0, ...VIEWPORT },
+      clip: { x: 0, y: 0, width: VIEWPORT.width, height: VIEWPORT.height },
       omitBackground: false,
     });
   } finally {

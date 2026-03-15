@@ -136,7 +136,6 @@ export function createApp({ deps, paths, cfg, initialState = {} } = {}) {
   }
 
   async function buildSetupScreen() {
-    if (existsSync(SETUP_DISPLAY)) return;
     try {
       fastify.log.info(`Generating setup${ext}…`);
       const html = renderSetupScreen({ bitDepth });
@@ -213,7 +212,7 @@ export function createApp({ deps, paths, cfg, initialState = {} } = {}) {
     });
 
     if (!dashboardReady) {
-      if (!refreshRunning) buildDashboard().catch(() => {});
+      if (!refreshRunning) buildDashboard().catch(err => fastify.log.error({ err }, 'Dashboard build failed'));
       return reply.send({
         filename:          SETUP_FILE,
         image_url:         screenUrl(SETUP_FILE),
@@ -341,10 +340,10 @@ export function createApp({ deps, paths, cfg, initialState = {} } = {}) {
     fastify.log.info(`ImageMagick "${imCmd}" ✓`);
 
     await buildSetupScreen();
-    buildDashboard().catch(() => {});
+    buildDashboard().catch(err => fastify.log.error({ err }, 'Initial dashboard build failed'));
 
     _interval = setInterval(
-      () => buildDashboard().catch(() => {}),
+      () => buildDashboard().catch(err => fastify.log.error({ err }, 'Scheduled dashboard build failed')),
       displayConfig.refreshIntervalSeconds * 1000
     );
   }
