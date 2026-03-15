@@ -5,9 +5,11 @@
 # Detects your OS, installs dependencies, writes .env, and optionally installs
 # the server as a system service (systemd on Linux, launchd on macOS).
 #
-# Usage:
-#   chmod +x setup.sh
-#   ./setup.sh
+# Usage (one-liner from anywhere):
+#   curl -fsSL https://raw.githubusercontent.com/iclaxton/marine-trmnl-server/main/setup.sh | bash
+#
+# Or if you have the repo already cloned:
+#   bash setup.sh
 # =============================================================================
 
 set -euo pipefail
@@ -97,6 +99,35 @@ prompt_yesno() {
   answer="${answer:-$default}"
   [[ "$answer" =~ ^[Yy]$ ]]
 }
+
+# ── Step 0: Clone repository (when running via curl | bash) ─────────────────
+
+if [[ ! -f "$SCRIPT_DIR/src/server.js" ]]; then
+  echo -e "${BOLD}── Step 0: Clone repository ─────────────────────────────${RESET}"
+  echo ""
+
+  if ! command_exists git; then
+    error "git is required to clone the repository. Please install git and re-run."
+  fi
+
+  INSTALL_DIR_DEFAULT="$HOME/marine-trmnl-server"
+  read -rp "$(echo -e "${BOLD}Install directory${RESET} [${CYAN}${INSTALL_DIR_DEFAULT}${RESET}]: ")" _install_input
+  INSTALL_DIR="${_install_input:-$INSTALL_DIR_DEFAULT}"
+
+  if [[ -d "$INSTALL_DIR/.git" ]]; then
+    info "Repository already exists at ${INSTALL_DIR} — pulling latest…"
+    git -C "$INSTALL_DIR" pull --ff-only
+  else
+    info "Cloning into ${INSTALL_DIR}…"
+    git clone https://github.com/iclaxton/marine-trmnl-server.git "$INSTALL_DIR"
+    success "Repository cloned ✓"
+  fi
+
+  echo ""
+  info "Continuing setup from ${INSTALL_DIR}…"
+  exec bash "$INSTALL_DIR/setup.sh"
+fi
+echo ""
 
 # ── Step 1: Node.js ──────────────────────────────────────────────────────────
 

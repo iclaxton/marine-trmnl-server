@@ -43,8 +43,13 @@ Each value shows the **current reading** (bold/large) plus a
 
 ## Quick start
 
-> **Tip:** run `bash setup.sh` for a guided interactive setup that handles
-> dependencies, `.env` creation, and optional service installation automatically.
+Run this single command — it clones the repo, installs dependencies, and walks you through configuration:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/iclaxton/marine-trmnl-server/main/setup.sh | bash
+```
+
+> **Tip:** you can also clone manually first and run `bash setup.sh` from the repo directory.
 
 ```bash
 # 1. Install system dependencies (Pi)
@@ -198,7 +203,12 @@ It then fetches the BMP directly and renders it.
 ### Pi setup
 
 ```bash
-# Recommended: guided setup (handles deps, .env, optional systemd service)
+# Recommended: one-liner (clones repo + guided setup)
+curl -fsSL https://raw.githubusercontent.com/iclaxton/marine-trmnl-server/main/setup.sh | bash
+
+# --- or clone first and then run setup ---
+git clone https://github.com/iclaxton/marine-trmnl-server.git
+cd marine-trmnl-server
 bash setup.sh
 
 # --- or follow the manual steps below ---

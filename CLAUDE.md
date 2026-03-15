@@ -15,7 +15,10 @@ SignalK → InfluxDB 2.x (localhost:8086) → HTML render (800×480) → Puppete
 ## Common Commands
 
 ```bash
-# Guided setup (dependencies, .env, optional service)
+# One-liner install from anywhere (clones repo + guided setup)
+curl -fsSL https://raw.githubusercontent.com/iclaxton/marine-trmnl-server/main/setup.sh | bash
+
+# Guided setup (when repo is already cloned)
 bash setup.sh
 
 # Run all tests (unit + integration; excludes influx.test.js which needs live InfluxDB)
