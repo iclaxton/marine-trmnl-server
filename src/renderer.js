@@ -149,12 +149,13 @@ function renderWind(data, isDark, bitDepth = 1) {
   const twLast     = twAngle?.stats?.last;
   const { side: twaSide } = normaliseWindAngle(twLast);
 
-  // Primary bearing for the SVG: use apparent angle, convert to compass direction
+  // Primary bearing for the SVG: use apparent angle (already in degrees after convertStats).
+  // Do NOT re-apply * 180/π here — that conversion was already done in fetchAllMetrics.
   const awsBig = formatValue(w.apparentSpeed?.stats?.last, w.apparentSpeed?.def?.decimals ?? 1);
   const awaDeg = formatValue(normAwa, 0);
 
   const arrowAngle = awLast !== null && awLast !== undefined
-    ? (((awLast * 180 / Math.PI) % 360) + 360) % 360
+    ? ((awLast % 360) + 360) % 360
     : 0;
 
   // Pressure sparkline — drawn if environment.outsidePressure is configured
@@ -429,11 +430,11 @@ body{
 .wind-top{display:flex;align-items:center;gap:10px;margin-bottom:8px}
 .wind-compass{flex-shrink:0}
 .wind-primary{flex:1}
-.wind-speed-group,.wind-angle-group{display:flex;align-items:baseline;gap:4px;margin-bottom:4px}
+.wind-speed-group,.wind-angle-group{display:flex;align-items:center;gap:4px;margin-bottom:4px;flex-wrap:wrap}
 .big-label{font-size:9px;font-weight:700;letter-spacing:0.1em;color:${text2};width:28px}
 .big-value{font-size:36px;font-weight:300;letter-spacing:-0.02em;font-variant-numeric:tabular-nums}
 .big-unit{font-size:14px;color:${text1};margin-left:2px}
-.medium-value{font-size:28px}
+.medium-value{font-size:24px;letter-spacing:0}
 
 .side-badge{
   font-size:9px;font-weight:700;letter-spacing:0.08em;padding:2px 5px;
@@ -590,12 +591,12 @@ export function renderDashboard(data, { bitDepth = 1 } = {}) {
  */
 export function renderSetupScreen({ bitDepth = 1 } = {}) {
   const isDark  = displayConfig.theme === 'dark';
-  const bg0     = isDark ? '#0a0a0a' : '#ffffff';
-  const text0   = isDark ? '#f2f2f2' : '#0a0a0a';
-  // In 2-bit mode snap to the nearest available display level to avoid dithering artefacts
-  // on what should be solid-colour text.  Same logic as buildCss().
-  const text2   = bitDepth >= 2 ? (isDark ? '#707070' : '#a0a0a0') : (isDark ? '#808080' : '#666666');
-  const border  = bitDepth >= 2 ? (isDark ? '#404040' : '#d0d0d0') : (isDark ? '#2e2e2e' : '#d8d8d8');
+  const bg0     = bitDepth >= 2 ? (isDark ? '#000000' : '#ffffff') : (isDark ? '#0a0a0a' : '#ffffff');
+  const text0   = bitDepth >= 2 ? (isDark ? '#ffffff' : '#000000') : (isDark ? '#f2f2f2' : '#0a0a0a');
+  // In 2-bit mode snap to exact e-ink palette levels (0/85/170/255 = #000/#555555/#aaaaaa/#fff)
+  // to avoid Floyd-Steinberg dithering on what should be solid-colour text.  Same logic as buildCss().
+  const text2   = bitDepth >= 2 ? (isDark ? '#555555' : '#aaaaaa') : (isDark ? '#808080' : '#666666');
+  const border  = bitDepth >= 2 ? (isDark ? '#555555' : '#aaaaaa') : (isDark ? '#2e2e2e' : '#d8d8d8');
   const name    = vesselConfig.name;
 
   return `<!DOCTYPE html>

@@ -63,7 +63,7 @@ cp .env.example .env
 # Then edit .env — set INFLUXDB_TOKEN, and any other values to override
 
 # 4. Edit config.yaml
-#    - Set byos.baseUrl to your Pi's IP (e.g. http://192.168.1.100:3001)
+#    - Set byos.baseUrl to your Pi's IP (e.g. http://192.168.1.100:3002)
 #    - Set vessel.name
 #    - Set influxdb.url / org / bucket
 #    - Set influxdb.schema to match your SignalK plugin
@@ -74,12 +74,7 @@ cp .env.example .env
 npm start
 ```
 
-Open `http://<your-pi-ip>:3001/preview` in a browser to see the live dashboard (auto-refreshes every 30 s).
-
-> **`npm audit` note:** there are 4 moderate warnings in `yauzl` (via
-> `@puppeteer/browsers`). That code path is only used to *download* bundled
-> Chromium, which this server never does — we use system Chromium. Safe to
-> ignore.
+Open `http://<your-pi-ip>:3002/preview` in a browser to see the live dashboard (auto-refreshes every 30 s).
 
 ---
 
@@ -92,7 +87,7 @@ are kept in **`.env`** and referenced as `${INFLUXDB_TOKEN}`.
 
 ```yaml
 byos:
-  baseUrl: "http://192.168.1.100:3001"   # Pi's LAN IP — used in image URLs sent to device
+  baseUrl: "http://192.168.1.100:3002"   # Pi's LAN IP — used in image URLs sent to device
   chromiumPath: "/usr/bin/chromium-browser"
   screensDir: "./screens"
 
@@ -170,7 +165,7 @@ The **scheduled pipeline** (every `refreshIntervalSeconds`) generates the file t
 ```
 InfluxDB metrics
     → HTML render (renderer.js, bitDepth-aware)
-    → Puppeteer headless screenshot → PNG
+    → Headless Chromium screenshot (spawnSync) → PNG
     → ImageMagick conversion
     → /screens/dashboard.bmp  (bitDepth=1, 1-bit monochrome)
        /screens/dashboard.png  (bitDepth=2, 4-level grayscale)
@@ -190,7 +185,7 @@ The device hits `GET /api/display` and receives:
 ```json
 {
   "filename": "dashboard.bmp",
-  "image_url": "http://192.168.1.100:3001/screens/dashboard.bmp",
+  "image_url": "http://192.168.1.100:3002/screens/dashboard.bmp",
   "refresh_rate": 900,
   "image_url_timeout": 0,
   "reset_firmware": false,
@@ -230,14 +225,14 @@ cp .env.example .env
 nano .env   # Add your INFLUXDB_TOKEN
 
 # 4. Edit config.yaml
-#    - Set byos.baseUrl to your Pi's IP, e.g. http://192.168.1.100:3001
+#    - Set byos.baseUrl to your Pi's IP, e.g. http://192.168.1.100:3002
 #    - Confirm byos.chromiumPath is /usr/bin/chromium-browser
 #    - Set influxdb.url / org / bucket / schema
 #    - Adjust metric paths
 
 # 5. Test it works
 npm start
-# Open http://<pi-ip>:3001/preview in a browser
+# Open http://<pi-ip>:3002/preview in a browser
 ```
 
 ### Docker deployment (alternative to bare-metal)
@@ -288,7 +283,7 @@ docker compose restart
 1. Hold the button on the TRMNL to enter WiFi setup mode
 2. Connect your phone to the TRMNL's WiFi hotspot
 3. In the captive portal, set **Custom Server URL** to:
-   `http://<your-pi-ip>:3001`
+   `http://<your-pi-ip>:3002`
 4. Connect to your boat's WiFi and complete setup
 5. The device will call `/api/setup` then start polling `/api/display`
 
@@ -341,9 +336,9 @@ sudo systemctl status marine-trmnl
 ```
 marine-trmnl-server/
 ├── src/
-│   ├── server.js      — Fastify BYOS API + all routes; wires real deps
+│   ├── server.js      — Production entry point; wires deps and starts Fastify
 │   ├── app.js         — createApp() factory; all routes; deps injected
-│   ├── screenshot.js  — Puppeteer HTML→PNG (system Chromium, Pi-optimised flags)
+│   ├── screenshot.js  — Headless Chromium HTML→PNG (spawnSync, Pi-optimised flags)
 │   ├── converter.js   — ImageMagick PNG→BMP3 / PNG→2-bit grayscale
 │   ├── devices.js     — File-backed device registry (data/devices.json)
 │   ├── influx.js      — InfluxDB 2.x Flux queries (windowed min/max/mean/last + time-series)

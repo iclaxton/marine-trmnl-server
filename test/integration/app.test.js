@@ -171,14 +171,14 @@ describe('GET /api/setup', () => {
     assert.ok(body.message,     'should have message');
   });
 
-  test('returns setup.bmp URL when dashboard not ready', async () => {
+  test('returns setup.bmp URL with ?v= when dashboard not ready', async () => {
     const res = await fastify.inject({
       method:  'GET',
       url:     '/api/setup',
       headers: { id: 'AA:BB:CC:DD:EE:01' },
     });
     const { image_url } = JSON.parse(res.body);
-    assert.ok(image_url.endsWith('/screens/setup.bmp'), `Expected setup.bmp URL but got: ${image_url}`);
+    assert.ok(image_url.includes('/screens/setup.bmp?v='), `Expected setup.bmp URL with ?v= but got: ${image_url}`);
   });
 
   test('message includes vessel name', async () => {
@@ -218,7 +218,7 @@ describe('GET /api/setup', () => {
     });
     const res = await f2.inject({ method: 'GET', url: '/api/setup', headers: { id: 'AA:00:00:00:00:FF' } });
     const { image_url } = JSON.parse(res.body);
-    assert.ok(image_url.endsWith('/screens/dashboard.bmp'), `Expected dashboard.bmp URL but got: ${image_url}`);
+    assert.ok(image_url.includes('/screens/dashboard.bmp?v='), `Expected dashboard.bmp URL with ?v= but got: ${image_url}`);
     d2();
     await f2.close();
     rmSync(tmpP2.screensDir, { recursive: true, force: true });
@@ -282,11 +282,11 @@ describe('GET /api/display', () => {
     assert.equal(body.update_firmware, false);
   });
 
-  test('returns dashboard.bmp when dashboardReady=true', async () => {
+  test('returns dashboard.bmp URL with ?v= when dashboardReady=true', async () => {
     const res = await fastify.inject({ method: 'GET', url: '/api/display', headers: { id: 'AA:BB:00:00:00:03' } });
     const body = JSON.parse(res.body);
-    assert.equal(body.filename, 'dashboard.bmp');
-    assert.ok(body.image_url.endsWith('/screens/dashboard.bmp'));
+    assert.ok(/^dashboard-\d+\.bmp$/.test(body.filename), `expected versioned filename, got: ${body.filename}`);
+    assert.ok(body.image_url.includes('/screens/dashboard.bmp?v='));
   });
 
   test('refresh_rate matches configured interval (900s)', async () => {
@@ -305,9 +305,9 @@ describe('GET /api/display', () => {
     });
     const res = await f2.inject({ method: 'GET', url: '/api/display', headers: { id: 'AA:00:00:00:00:01' } });
     const body = JSON.parse(res.body);
-    assert.equal(body.filename,     'setup.bmp');
+    assert.ok(/^setup-\d+\.bmp$/.test(body.filename),     `expected versioned filename, got: ${body.filename}`);
     assert.equal(body.refresh_rate, 60);
-    assert.ok(body.image_url.endsWith('/screens/setup.bmp'));
+    assert.ok(body.image_url.includes('/screens/setup.bmp?v='));
     d2();
     await f2.close();
     rmSync(tmpP2.screensDir, { recursive: true, force: true });
@@ -423,21 +423,21 @@ describe('GET /screens/:filename', () => {
   });
 
   test('returns 200 with image/bmp for .bmp file', async () => {
-    const res = await fastify.inject({ method: 'GET', url: '/screens/dashboard.bmp' });
+    const res = await fastify.inject({ method: 'GET', url: '/screens/dashboard.bmp?v=1' });
     assert.equal(res.statusCode, 200);
     assert.ok(res.headers['content-type'].includes('image/bmp'));
   });
 
   test('returns 200 with image/png for .png file', async () => {
-    // dashboard_raw.png is the Puppeteer intermediate screenshot (always PNG regardless of bit depth)
-    const res = await fastify.inject({ method: 'GET', url: '/screens/dashboard_raw.png' });
+    // dashboard_raw.png is the Chromium intermediate screenshot (always PNG regardless of bit depth)
+    const res = await fastify.inject({ method: 'GET', url: '/screens/dashboard_raw.png?v=1' });
     assert.equal(res.statusCode, 200);
     assert.ok(res.headers['content-type'].includes('image/png'));
   });
 
-  test('includes no-cache header', async () => {
-    const res = await fastify.inject({ method: 'GET', url: '/screens/dashboard.bmp' });
-    assert.equal(res.headers['cache-control'], 'no-cache');
+  test('includes immutable cache header for versioned URL', async () => {
+    const res = await fastify.inject({ method: 'GET', url: '/screens/dashboard.bmp?v=1' });
+    assert.equal(res.headers['cache-control'], 'public, max-age=31536000, immutable');
   });
 });
 

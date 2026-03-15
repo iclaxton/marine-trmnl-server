@@ -9,11 +9,14 @@
  * On macOS (dev):        Ensure Google Chrome or Brave is installed
  */
 
-import { spawnSync } from 'node:child_process';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 import { platform, tmpdir } from 'node:os';
 import { existsSync, writeFileSync, unlinkSync, mkdtempSync, rmdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { byosConfig } from './config.js';
+
+const execFileAsync = promisify(execFile);
 
 const WIDTH  = 800;
 const HEIGHT = 480;
@@ -61,6 +64,9 @@ function resolveChromiumPath() {
 /**
  * Render an HTML string to a PNG file at outputPath.
  *
+ * All subprocess calls are async (execFileAsync) so the Node.js event loop
+ * remains unblocked while Chromium and ImageMagick are running.
+ *
  * @param {string} html          — Full HTML document string
  * @param {string} outputPath    — Absolute path to write the PNG
  * @returns {Promise<void>}
@@ -69,59 +75,62 @@ export async function screenshotHtml(html, outputPath) {
   const executablePath = resolveChromiumPath();
 
   // Write HTML to a temp file — Chromium CLI requires a file:// URL.
-  const tmpDir = mkdtempSync(join(tmpdir(), 'trmnl-'));
+  const tmpDir  = mkdtempSync(join(tmpdir(), 'trmnl-'));
   const tmpFile = join(tmpDir, 'dashboard.html');
 
   try {
     writeFileSync(tmpFile, html, 'utf8');
 
     // Use Chromium's --screenshot flag — no Puppeteer CDP session at all.
-    // --screenshot=PATH writes directly to the given path.
     // Window height is padded to account for Chrome's virtual browser chrome
     // on macOS (~88px overhead). The PNG is cropped to WIDTH×HEIGHT afterwards.
-    const result = spawnSync(executablePath, [
-      '--headless',
-      '--no-sandbox',
-      '--disable-setuid-sandbox',
-      '--disable-dev-shm-usage',
-      '--disable-gpu',
-      '--force-device-scale-factor=1',
-      '--hide-scrollbars',
-      `--window-size=${WIDTH},${HEIGHT + WINDOW_HEIGHT_PADDING}`,
-      `--screenshot=${outputPath}`,
-      `file://${tmpFile}`,
-    ], {
-      timeout: SCREENSHOT_TIMEOUT_MS,
-      encoding: 'utf8',
-    });
-
-    if (result.error) {
-      throw new Error(`Chromium failed to launch: ${result.error.message}`);
-    }
-    if (result.status !== 0) {
-      const detail = (result.stderr || '').slice(-500) || 'unknown error';
-      throw new Error(`Chromium exited with code ${result.status}: ${detail}`);
+    try {
+      await execFileAsync(executablePath, [
+        '--headless',
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-gpu',
+        '--no-first-run',
+        '--disable-extensions',
+        '--disable-sync',
+        '--disable-background-networking',
+        '--disable-default-apps',
+        '--disable-translate',
+        '--disable-client-side-phishing-detection',
+        '--disable-component-update',
+        '--mute-audio',
+        '--force-device-scale-factor=1',
+        '--hide-scrollbars',
+        `--window-size=${WIDTH},${HEIGHT + WINDOW_HEIGHT_PADDING}`,
+        `--screenshot=${outputPath}`,
+        `file://${tmpFile}`,
+      ], { timeout: SCREENSHOT_TIMEOUT_MS });
+    } catch (err) {
+      // execFile rejects with the stderr in err.stderr
+      const detail = (err.stderr || err.message || 'unknown error').slice(-500);
+      throw new Error(`Chromium screenshot failed: ${detail}`);
     }
 
     // Crop the screenshot back to the exact display dimensions. Failures here
     // are non-fatal — the uncropped PNG is still usable (just taller).
-    const magick = spawnSync('magick', [
+    const cropArgs = [
       outputPath,
       '-crop', `${WIDTH}x${HEIGHT}+0+0`,
       '+repage',
       outputPath,
-    ], { encoding: 'utf8' });
-    if (magick.status !== 0) {
-      // Fall back to ImageMagick v6 `convert` command
-      spawnSync('convert', [
-        outputPath,
-        '-crop', `${WIDTH}x${HEIGHT}+0+0`,
-        '+repage',
-        outputPath,
-      ], { encoding: 'utf8' });
+    ];
+    try {
+      await execFileAsync('magick', cropArgs);
+    } catch {
+      try {
+        await execFileAsync('convert', cropArgs);
+      } catch { /* ignore — uncropped PNG is usable */ }
     }
   } finally {
     try { unlinkSync(tmpFile); } catch { /* ignore */ }
     try { rmdirSync(tmpDir); } catch { /* ignore */ }
   }
 }
+
+

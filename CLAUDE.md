@@ -7,7 +7,7 @@ a sailing vessel. Runs on a Raspberry Pi on the vessel's local network (default 
 
 **Data pipeline:**
 ```
-SignalK → InfluxDB 2.x (localhost:8086) → HTML render (800×480) → Puppeteer PNG → ImageMagick → TRMNL device
+SignalK → InfluxDB 2.x (localhost:8086) → HTML render (800×480) → Chromium screenshot PNG (spawnSync) → ImageMagick → TRMNL device
 ```
 
 ---
@@ -44,7 +44,7 @@ curl -s http://localhost:8086/health
 |---|---|
 | Runtime | Node.js 20+ ESM (`"type": "module"`) |
 | HTTP server | Fastify v5.2.1 |
-| Screenshot | puppeteer-core v24 (headless Chrome) |
+| Screenshot | system Chromium via `spawnSync` (no Puppeteer dependency) |
 | Image conversion | ImageMagick CLI (`convert`) — not a Node package |
 | InfluxDB client | `@influxdata/influxdb-client` |
 | Config | `js-yaml` + `dotenv` |
@@ -66,7 +66,7 @@ src/
   devices.js    — createDeviceStore(); file-backed JSON device registry
   influx.js     — queryStats(), queryTimeSeries(), buildQuery helpers
   renderer.js   — renderDashboard(), renderSetupScreen(), buildPreviewPage(), buildCss(), pressureSparklineSvg()
-  screenshot.js — screenshotHtml() Puppeteer wrapper
+  screenshot.js — screenshotHtml() headless Chromium via spawnSync
   server.js     — production entry point; wires real deps and starts Fastify
   utils.js      — converters: mps_to_kts, rad_to_deg, kelvin_to_c, pa_to_hpa, applyConversion()
 test/
@@ -103,7 +103,7 @@ const { fastify } = createApp({
     devices: { getOrCreate, get, updateTelemetry, updateCapabilities, list },
   },
   paths: { screensDir: '/tmp/…', DASHBOARD_RAW: '…', DASHBOARD_DISPLAY: '…', SETUP_RAW: '…', SETUP_DISPLAY: '…' },
-  cfg: { byosConfig: { baseUrl: 'http://localhost:3001' }, displayConfig: { bitDepth: 1, refreshIntervalSeconds: 900 }, … },
+  cfg: { byosConfig: { baseUrl: 'http://localhost:3002' }, displayConfig: { bitDepth: 1, refreshIntervalSeconds: 900 }, … },
   initialState: { dashboardReady: true },
 });
 const res = await fastify.inject({ method: 'GET', url: '/health' });
@@ -138,7 +138,7 @@ Reference: [TRMNL ImageMagick Guide](https://docs.trmnl.com/go/diy/imagemagick-g
 `displayExtension(bitDepth)` → `'bmp'` or `'png'`
 
 Path names passed to `createApp()` as `paths`:
-- `DASHBOARD_RAW` — Puppeteer PNG output
+- `DASHBOARD_RAW` — Chromium screenshot output PNG
 - `DASHBOARD_DISPLAY` — converted display file
 - `SETUP_RAW` / `SETUP_DISPLAY` — setup screen equivalents
 

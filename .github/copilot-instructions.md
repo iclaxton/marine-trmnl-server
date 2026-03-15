@@ -10,7 +10,7 @@ mounted aboard a sailing boat. It runs on a Raspberry Pi on the vessel's local n
 SignalK (boat sensors)
   → InfluxDB 2.x  (localhost:8086)
   → HTML render   (src/renderer.js — 800×480 CSS grid dashboard)
-  → Puppeteer     (headless Chrome screenshot → PNG)
+  → Chromium      (headless screenshot via spawnSync → PNG)
   → ImageMagick   (PNG → BMP3 monochrome OR 4-level grayscale PNG)
   → TRMNL device  (fetches via BYOS HTTP API)
 ```
@@ -27,7 +27,7 @@ SignalK (boat sensors)
 
 - **Runtime:** Node.js 20+, ESM (`"type": "module"`) — always `import`/`export`, never `require()`
 - **HTTP:** Fastify v5.2.1
-- **Screenshot:** puppeteer-core v24 (headless Chrome)
+- **Screenshot:** system Chromium via `spawnSync` (no Puppeteer dependency)
 - **Image conversion:** ImageMagick CLI (`convert` command — not a Node package) — see [TRMNL ImageMagick Guide](https://docs.trmnl.com/go/diy/imagemagick-guide)
 - **InfluxDB:** `@influxdata/influxdb-client`
 - **InfluxDB org/bucket:** configurable via `config.yaml` (`influxdb.org` / `influxdb.bucket`)
@@ -46,7 +46,7 @@ src/
   devices.js    — createDeviceStore(); file-backed JSON device registry
   influx.js     — queryStats(), queryTimeSeries(), buildQuery helpers
   renderer.js   — renderDashboard(), renderSetupScreen(), buildPreviewPage(), buildCss(), pressureSparklineSvg()
-  screenshot.js — screenshotHtml() Puppeteer wrapper
+  screenshot.js — screenshotHtml() headless Chromium via spawnSync
   server.js     — production entry point; wires deps and starts Fastify
   utils.js      — SI unit converters: mps_to_kts, rad_to_deg, kelvin_to_c, pa_to_hpa, etc.
 test/
@@ -90,7 +90,7 @@ const client = new InfluxDB({ url: config.influxdb.url }); // top-level side eff
 
 ### Image File Paths
 Paths are assembled in `server.js` and passed into `createApp()` as `paths`:
-- `DASHBOARD_RAW` — Puppeteer output PNG (e.g. `screens/dashboard.png`)
+- `DASHBOARD_RAW` — Chromium screenshot output PNG (e.g. `screens/dashboard.png`)
 - `DASHBOARD_DISPLAY` — converted display file (`.bmp` or `.png`)
 - `SETUP_RAW` / `SETUP_DISPLAY` — same pattern for the setup screen
 
@@ -187,7 +187,7 @@ import { strict as assert } from 'node:assert';
 ```yaml
 # config.yaml (non-secret settings)
 byos:
-  baseUrl: "http://<PI_IP>:3001"   # URL TRMNL device uses to reach this server
+  baseUrl: "http://<PI_IP>:3002"   # URL TRMNL device uses to reach this server
   chromiumPath: "/usr/bin/chromium-browser"
   screensDir: "./screens"
 
@@ -195,7 +195,7 @@ vessel:
   name: "HEBE"
 
 server:
-  port: 3001
+  port: 3002
   host: "0.0.0.0"
 
 influxdb:

@@ -51,6 +51,7 @@ import { resolve, extname } from 'node:path';
  *     dashboardReady?: boolean,
  *     lastRefreshAt?: Date|null,
  *     lastError?: string|null,
+ *     serverStartedAt?: number,
  *   }
  * }} options
  */
@@ -94,22 +95,26 @@ export function createApp({ deps, paths, cfg, initialState = {} } = {}) {
    * @param {import('fastify').FastifyRequest} [request]
    * @returns {string}
    */
-  function screenUrl(filename, request) {
+  function screenUrl(filename, request, bust = null) {
     let base = (byosConfig?.baseUrl ?? `http://localhost:${serverConfig?.port ?? 3001}`)
       .replace(/\/$/, '');
     if (request && /^https?:\/\/localhost(:\d+)?$/.test(base)) {
       const proto = request.protocol ?? 'http';
       base = `${proto}://${request.headers.host}`;
     }
-    return `${base}/screens/${filename}`;
+    const qs = bust ? `?v=${bust}` : '';
+    return `${base}/screens/${filename}${qs}`;
   }
 
   // ─── State ─────────────────────────────────────────────────────────────────
 
-  let dashboardReady = initialState.dashboardReady ?? false;
-  let lastRefreshAt  = initialState.lastRefreshAt  ?? null;
-  let lastError      = initialState.lastError      ?? null;
-  let refreshRunning = false;
+  let dashboardReady  = initialState.dashboardReady  ?? false;
+  let lastRefreshAt   = initialState.lastRefreshAt   ?? null;
+  let lastError       = initialState.lastError       ?? null;
+  let refreshRunning  = false;
+  // Stable version token for setup-screen URLs — changes on every server restart
+  // so devices that previously cached a bare URL get a new unique URL on reconnect.
+  const serverStartedAt = initialState.serverStartedAt ?? Date.now();
 
   // ─── Fastify ───────────────────────────────────────────────────────────────
 
@@ -176,9 +181,12 @@ export function createApp({ deps, paths, cfg, initialState = {} } = {}) {
 
     const mimeType = extname(filename).toLowerCase() === '.bmp' ? 'image/bmp' : 'image/png';
 
+    // Each ?v= URL is content-stable for its lifetime — safe to cache immutably.
+    // A new ?v= value is issued after every dashboard rebuild, so stale content
+    // is never served to a client that obtained its URL from /api/display.
     return reply
       .header('Content-Type', mimeType)
-      .header('Cache-Control', 'no-cache')
+      .header('Cache-Control', 'public, max-age=31536000, immutable')
       .send(createReadStream(filePath));
   });
 
@@ -204,10 +212,11 @@ export function createApp({ deps, paths, cfg, initialState = {} } = {}) {
     captureCapabilities(mac, request);
     fastify.log.info({ mac, friendlyId: device.friendlyId }, 'Device setup');
 
+    const bust = lastRefreshAt ? lastRefreshAt.getTime() : serverStartedAt;
     return reply.send({
       api_key:     device.apiKey,
       friendly_id: device.friendlyId,
-      image_url:   dashboardReady ? screenUrl(DASHBOARD_FILE, request) : screenUrl(SETUP_FILE, request),
+      image_url:   dashboardReady ? screenUrl(DASHBOARD_FILE, request, bust) : screenUrl(SETUP_FILE, request, serverStartedAt),
       message:     `Welcome aboard ${vesselConfig.name}`,
     });
   });
@@ -226,9 +235,14 @@ export function createApp({ deps, paths, cfg, initialState = {} } = {}) {
 
     if (!dashboardReady) {
       if (!refreshRunning) buildDashboard().catch(err => fastify.log.error({ err }, 'Dashboard build failed'));
+      const setupUrl = screenUrl(SETUP_FILE, request, serverStartedAt);
+      // Use a versioned virtual filename so TRMNL firmware doesn't use a stale cached copy.
+      // The actual file on disk is always SETUP_FILE; only the cache-key label changes.
+      const setupFilename = SETUP_FILE.replace(/(\.\w+)$/, `-${serverStartedAt}$1`);
+      fastify.log.info({ mac, image_url: setupUrl, filename: setupFilename }, 'Display: setup screen (dashboard not ready)');
       return reply.send({
-        filename:          SETUP_FILE,
-        image_url:         screenUrl(SETUP_FILE, request),
+        filename:          setupFilename,
+        image_url:         setupUrl,
         image_url_timeout: 0,
         refresh_rate:      60,
         reset_firmware:    false,
@@ -236,9 +250,15 @@ export function createApp({ deps, paths, cfg, initialState = {} } = {}) {
       });
     }
 
+    const bust = lastRefreshAt ? lastRefreshAt.getTime() : serverStartedAt;
+    const dashUrl = screenUrl(DASHBOARD_FILE, request, bust);
+    // Use a versioned virtual filename so TRMNL firmware doesn't use a stale cached copy.
+    // The actual file on disk is always DASHBOARD_FILE; only the cache-key label changes.
+    const dashFilename = DASHBOARD_FILE.replace(/(\.\w+)$/, `-${bust}$1`);
+    fastify.log.info({ mac, image_url: dashUrl, filename: dashFilename, lastRefreshAt }, 'Display: dashboard');
     return reply.send({
-      filename:          DASHBOARD_FILE,
-      image_url:         screenUrl(DASHBOARD_FILE, request),
+      filename:          dashFilename,
+      image_url:         dashUrl,
       image_url_timeout: 0,
       refresh_rate:      displayConfig.refreshIntervalSeconds,
       reset_firmware:    false,
@@ -355,8 +375,18 @@ export function createApp({ deps, paths, cfg, initialState = {} } = {}) {
   let _interval = null;
 
   /**
-   * Start the background pipeline: verify ImageMagick, generate setup.bmp,
-   * kick off first dashboard build, and schedule recurring refreshes.
+   * Start the background pipeline: verify ImageMagick, then return so the
+   * server can start listening immediately. Screen builds run in the background.
+   *
+   * Startup sequence:
+   *   1. mkdirSync screensDir           — synchronous, instant
+   *   2. checkImageMagick()             — runs `magick --version`, < 200 ms
+   *   3. fastify.listen() unblocks      — server accepts requests
+   *   4. buildSetupScreen() background  — Chromium + ImageMagick (~5–15 s)
+   *   5. buildDashboard()  background   — InfluxDB + Chromium + ImageMagick
+   *
+   * If a device connects during step 4/5 it receives a 60 s refresh_rate and
+   * will retry; the setup / dashboard images will be ready well before then.
    */
   async function initialize() {
     mkdirSync(screensDir, { recursive: true });
@@ -364,8 +394,11 @@ export function createApp({ deps, paths, cfg, initialState = {} } = {}) {
     const imCmd = await checkImageMagick();
     fastify.log.info(`ImageMagick "${imCmd}" ✓`);
 
-    await buildSetupScreen();
-    buildDashboard().catch(err => fastify.log.error({ err }, 'Initial dashboard build failed'));
+    // Run setup screen then dashboard sequentially in background so we never
+    // launch two Chromium processes at once (important on memory-limited Pi).
+    buildSetupScreen()
+      .then(() => buildDashboard().catch(err => fastify.log.error({ err }, 'Initial dashboard build failed')))
+      .catch(err => fastify.log.error({ err }, 'Setup screen build failed'));
 
     _interval = setInterval(
       () => buildDashboard().catch(err => fastify.log.error({ err }, 'Scheduled dashboard build failed')),
