@@ -1,5 +1,7 @@
 # Marine TRMNL Server
 
+[![CI](https://github.com/YOUR_GITHUB_USERNAME/marine-trmnl-server/actions/workflows/ci.yml/badge.svg)](https://github.com/YOUR_GITHUB_USERNAME/marine-trmnl-server/actions/workflows/ci.yml)
+
 A lightweight Node.js server for a Raspberry Pi that generates a marine
 dashboard for the [TRMNL](https://usetrmnl.com) e-ink display.
 
@@ -222,6 +224,16 @@ npm start
 
 Docker handles Node.js, Chromium and ImageMagick automatically — no manual
 `apt install` needed. The image works on both Raspberry Pi (arm64) and x86.
+
+A pre-built multi-platform image is published to GitHub Container Registry on
+every push to `main`:
+
+```bash
+# Pull the latest pre-built image (amd64 or arm64 auto-selected)
+docker pull ghcr.io/YOUR_GITHUB_USERNAME/marine-trmnl-server:latest
+```
+
+Or build locally:
 
 ```bash
 # 1. Copy and edit your config
