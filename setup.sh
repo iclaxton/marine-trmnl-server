@@ -527,7 +527,7 @@ EOF
 
     sudo systemctl daemon-reload
     sudo systemctl enable "$SERVICE_NAME"
-    sudo systemctl start "$SERVICE_NAME"
+    sudo systemctl restart "$SERVICE_NAME"
 
     success "systemd service '${SERVICE_NAME}' installed and started ✓"
     info "To view logs:   journalctl -u ${SERVICE_NAME} -f"
