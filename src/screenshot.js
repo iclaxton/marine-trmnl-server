@@ -24,13 +24,14 @@ const SCREENSHOT_TIMEOUT_MS = 30_000;
  * --window-size             Sets viewport via OS window rather than CDP
  *                           Emulation API, avoiding "Emulation.setTouchEmulationEnabled:
  *                           Session closed" errors on Pi's older Chromium.
+ * Note: --disable-software-rasterizer must NOT be combined with --disable-gpu;
+ * together they leave no rendering backend and crash Chromium on startup.
  */
 const CHROMIUM_ARGS = [
   '--no-sandbox',
   '--disable-setuid-sandbox',
   '--disable-dev-shm-usage',
   '--disable-gpu',
-  '--disable-software-rasterizer',
   `--window-size=${WIDTH},${HEIGHT}`,
 ];
 
@@ -71,9 +72,9 @@ export async function screenshotHtml(html, outputPath) {
   const browser = await puppeteer.launch({
     executablePath,
     args: CHROMIUM_ARGS,
-    // 'shell' uses the classic --headless flag, better supported by the
-    // Raspberry Pi's older Chromium build than the newer headless mode.
-    headless: 'shell',
+    // Use new headless mode (supported by Chromium 112+, including Pi Chromium 126).
+    // 'shell' uses --headless=old which behaves poorly on Chromium 126.
+    headless: true,
     // null disables Puppeteer's CDP-based viewport management entirely,
     // avoiding Emulation.setTouchEmulationEnabled calls that crash on Pi.
     defaultViewport: null,
