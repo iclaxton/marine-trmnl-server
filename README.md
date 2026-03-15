@@ -225,12 +225,15 @@ npm start
 Docker handles Node.js, Chromium and ImageMagick automatically — no manual
 `apt install` needed. The image works on both Raspberry Pi (arm64) and x86.
 
-A pre-built multi-platform image is published to GitHub Container Registry on
-every push to `main`:
+A pre-built multi-platform image is published to GitHub Container Registry and
+Docker Hub on every push to `main`:
 
 ```bash
-# Pull the latest pre-built image (amd64 or arm64 auto-selected)
+# GitHub Container Registry
 docker pull ghcr.io/iclaxton/marine-trmnl-server:latest
+
+# Docker Hub
+docker pull klaxian/marine-trmnl-server:latest
 ```
 
 Or build locally:

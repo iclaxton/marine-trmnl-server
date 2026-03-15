@@ -35,16 +35,14 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # Optional: also push to Docker Hub.
-      # Add DOCKERHUB_USERNAME and DOCKERHUB_TOKEN as repository secrets and
-      # uncomment the block below.
-      #
-      # - name: Log in to Docker Hub
-      #   uses: docker/login-action@v3
-      #   with:
-      #     registry: docker.io
-      #     username: ${{ secrets.DOCKERHUB_USERNAME }}
-      #     password: ${{ secrets.DOCKERHUB_TOKEN }}
+      # Also push to Docker Hub.
+      # Requires DOCKERHUB_TOKEN repository secret (Settings → Secrets → Actions).
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          registry: docker.io
+          username: klaxian
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       # Generate image tags:
       #   push to main  → :latest + :sha-<short>
@@ -55,7 +53,7 @@ jobs:
         with:
           images: |
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-            # docker.io/${{ secrets.DOCKERHUB_USERNAME }}/marine-trmnl-server
+            docker.io/klaxian/marine-trmnl-server
           tags: |
             type=ref,event=tag
             type=raw,value=latest,enable={{is_default_branch}}
