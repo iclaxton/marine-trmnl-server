@@ -171,6 +171,7 @@ function renderWind(data, isDark, bitDepth = 1) {
     : '';
 
   return `<section class="panel panel-wind">
+  <div class="wind-main">
   <div class="panel-title">WIND</div>
   <div class="wind-top">
     <div class="wind-compass">${windArrowSvg(arrowAngle, isDark, bitDepth)}</div>
@@ -215,6 +216,7 @@ function renderWind(data, isDark, bitDepth = 1) {
       <div class="stat-header">TWA · min/avg/max (°)</div>
       <div class="stat-row">${statsLine(twStats, 0)}</div>
     </div>
+  </div>
   </div>
   ${pressHtml}
 </section>`;
@@ -370,9 +372,12 @@ function buildCss(isDark, bitDepth = 1) {
   const fontSmoothing = is2bit ? '-webkit-font-smoothing:grayscale;-moz-osx-font-smoothing:grayscale;' : '';
 
   return `
-*{box-sizing:border-box;margin:0;padding:0}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;border:0;outline:0}
+html{width:800px;overflow:hidden;scrollbar-width:none;background:${bg0}}
+html::-webkit-scrollbar{display:none}
 body{
-  width:800px;height:480px;overflow:hidden;
+  width:800px;
+  margin:0;padding:0;
   background:${bg0};color:${text0};
   font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;
   font-size:12px;line-height:1.3;
@@ -382,7 +387,7 @@ body{
 /* ── Header ── */
 .header{
   display:flex;justify-content:space-between;align-items:center;
-  height:40px;padding:0 14px;
+  width:800px;height:46px;padding:6px 14px 0;
   background:${isDark ? '#000' : '#000'};color:#fff;
   border-bottom:2px solid ${isDark ? '#333' : '#000'};
 }
@@ -397,9 +402,9 @@ body{
    Col 3 (1fr):   Battery   (row 1)  |  Cabin  (row 2)  */
 .main-grid{
   display:grid;
-  grid-template-columns: 260px 270px 270px;
-  grid-template-rows: 58% 42%;
-  width:800px;height:416px;
+  grid-template-columns:260px 270px 270px;
+  grid-template-rows:238px 172px;
+  width:800px;height:410px;
 }
 
 /* ── Panels ── */
@@ -409,6 +414,7 @@ body{
   background:${bg0};
 }
 .panel-wind{grid-column:1;grid-row:1/3;border-left:none;display:flex;flex-direction:column}
+.wind-main{flex:1;min-height:0;overflow:hidden;display:flex;flex-direction:column}
 .panel-nav{grid-column:2;grid-row:1}
 .panel-depth{grid-column:2;grid-row:2}
 .panel-battery{grid-column:3;grid-row:1}
@@ -507,14 +513,14 @@ body{
 /* ── Footer ── */
 .footer{
   display:flex;justify-content:space-between;align-items:center;
-  height:24px;padding:0 14px;
+  width:800px;height:24px;padding:0 14px;
   background:${footerBg};
   border-top:1px solid ${border};
   font-size:9.5px;color:${text2};font-variant-numeric:tabular-nums;
 }
 
 /* ── Pressure sparkline (inside wind panel) ── */
-.press-section{margin-top:auto;padding-top:6px;border-top:1px solid ${border}}
+.press-section{flex-shrink:0;padding-top:6px;border-top:1px solid ${border}}
 .press-chart{margin:3px 0;line-height:0;text-align:center}
 `;
 }
@@ -552,7 +558,7 @@ export function renderDashboard(data, { bitDepth = 1 } = {}) {
 <header class="header">
   <div class="vessel-name">&#9875; ${vesselConfig.name}</div>
   <div class="header-right">
-    <div class="header-time">${timeStr}</div>
+    <div class="header-time">UPDATED ${timeStr}</div>
     <div>${dateStr}</div>
   </div>
 </header>

@@ -15,11 +15,21 @@ import { existsSync, writeFileSync, unlinkSync, mkdtempSync, rmdirSync } from 'n
 import { join } from 'node:path';
 import { byosConfig } from './config.js';
 
-const WIDTH = 800;
+const WIDTH  = 800;
 const HEIGHT = 480;
+
+/**
+ * Extra vertical pixels added to --window-size to compensate for Chrome's
+ * virtual browser chrome on macOS (URL bar, toolbar — ~88px). The screenshot
+ * is always cropped back to WIDTH×HEIGHT afterwards, so the extra space is
+ * invisible to callers. On Linux there is no overhead but the extra pixels
+ * are harmless.
+ */
+const WINDOW_HEIGHT_PADDING = 200;
 
 /** Hard timeout (ms) for the entire screenshot operation */
 const SCREENSHOT_TIMEOUT_MS = 30_000;
+
 
 function resolveChromiumPath() {
   if (process.env.CHROMIUM_PATH) return process.env.CHROMIUM_PATH;
@@ -34,7 +44,13 @@ function resolveChromiumPath() {
     }
   }
   if (platform() === 'darwin') {
-    return '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+    for (const p of [
+      '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+      '/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge',
+      '/Applications/Brave Browser 3.app/Contents/MacOS/Brave Browser',
+    ]) {
+      if (existsSync(p)) return p;
+    }
   }
 
   throw new Error(
@@ -61,13 +77,17 @@ export async function screenshotHtml(html, outputPath) {
 
     // Use Chromium's --screenshot flag — no Puppeteer CDP session at all.
     // --screenshot=PATH writes directly to the given path.
+    // Window height is padded to account for Chrome's virtual browser chrome
+    // on macOS (~88px overhead). The PNG is cropped to WIDTH×HEIGHT afterwards.
     const result = spawnSync(executablePath, [
       '--headless',
       '--no-sandbox',
       '--disable-setuid-sandbox',
       '--disable-dev-shm-usage',
       '--disable-gpu',
-      `--window-size=${WIDTH},${HEIGHT}`,
+      '--force-device-scale-factor=1',
+      '--hide-scrollbars',
+      `--window-size=${WIDTH},${HEIGHT + WINDOW_HEIGHT_PADDING}`,
       `--screenshot=${outputPath}`,
       `file://${tmpFile}`,
     ], {
@@ -81,6 +101,24 @@ export async function screenshotHtml(html, outputPath) {
     if (result.status !== 0) {
       const detail = (result.stderr || '').slice(-500) || 'unknown error';
       throw new Error(`Chromium exited with code ${result.status}: ${detail}`);
+    }
+
+    // Crop the screenshot back to the exact display dimensions. Failures here
+    // are non-fatal — the uncropped PNG is still usable (just taller).
+    const magick = spawnSync('magick', [
+      outputPath,
+      '-crop', `${WIDTH}x${HEIGHT}+0+0`,
+      '+repage',
+      outputPath,
+    ], { encoding: 'utf8' });
+    if (magick.status !== 0) {
+      // Fall back to ImageMagick v6 `convert` command
+      spawnSync('convert', [
+        outputPath,
+        '-crop', `${WIDTH}x${HEIGHT}+0+0`,
+        '+repage',
+        outputPath,
+      ], { encoding: 'utf8' });
     }
   } finally {
     try { unlinkSync(tmpFile); } catch { /* ignore */ }

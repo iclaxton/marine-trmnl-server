@@ -317,6 +317,18 @@ export function createApp({ deps, paths, cfg, initialState = {} } = {}) {
     return reply.type('text/html').send(buildPreviewPage(vesselConfig.name));
   });
 
+  // Serves the exact HTML that gets sent to Chromium — open in browser at 800×480 zoom to verify.
+  fastify.get('/preview/raw', async (request, reply) => {
+    try {
+      const data = await fetchAllMetrics();
+      const html = await renderDashboard(data);
+      return reply.type('text/html').send(html);
+    } catch (err) {
+      fastify.log.error({ err }, 'preview/raw failed');
+      return reply.code(500).send({ error: err.message });
+    }
+  });
+
   fastify.get('/health', async (request, reply) => {
     const secondsSince = lastRefreshAt
       ? Math.round((Date.now() - lastRefreshAt) / 1000)
