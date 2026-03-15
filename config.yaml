@@ -46,7 +46,7 @@ influxdb:
 display:
   # How often (seconds) the TRMNL device should refresh.
   # The server uses this same window to calculate min/max/mean stats.
-  refreshIntervalSeconds: 900    # 15 minutes
+  refreshIntervalSeconds: 300    # 5 minutes
 
   # Display bit depth — set this to match your TRMNL model.
   #   1 = 1-bit monochrome   (TRMNL Standard / Developer)  → BMP3 output
