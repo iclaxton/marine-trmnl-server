@@ -631,6 +631,9 @@ header{display:flex;align-items:center;justify-content:space-between;padding:14p
 .status.loading{color:#d1d5db}
 .refresh-btn{background:rgba(255,255,255,0.12);border:1px solid rgba(255,255,255,0.2);color:#fff;padding:5px 14px;border-radius:6px;cursor:pointer;font-size:13px}
 .refresh-btn:hover{background:rgba(255,255,255,0.22)}
+.render-links{display:flex;gap:6px}
+.render-link{background:transparent;border:1px solid rgba(255,255,255,0.25);color:#ccc;padding:4px 10px;border-radius:5px;text-decoration:none;font-size:11px;font-weight:600;letter-spacing:0.04em}
+.render-link:hover{background:rgba(255,255,255,0.1);color:#fff}
 .dashboard{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:16px;padding:20px;flex:1}
 .card{background:#fff;border-radius:10px;padding:16px 20px;box-shadow:0 1px 4px rgba(0,0,0,0.08),0 0 0 1px rgba(0,0,0,0.04)}
 .card-title{font-size:10px;font-weight:700;letter-spacing:0.15em;text-transform:uppercase;color:#888;border-bottom:1px solid #eee;padding-bottom:8px;margin-bottom:14px}
@@ -678,6 +681,10 @@ footer{display:flex;justify-content:space-between;padding:10px 24px;font-size:11
   <div class="vessel">&#9875; ${vesselName}</div>
   <div class="header-right">
     <span id="status" class="status loading">Loading\u2026</span>
+    <div class="render-links">
+      <a class="render-link" href="/api/render/png" target="_blank">PNG (2-bit)</a>
+      <a class="render-link" href="/api/render/bmp" target="_blank">BMP (1-bit)</a>
+    </div>
     <button class="refresh-btn" onclick="doRefresh()">&#8635; Refresh</button>
   </div>
 </header>

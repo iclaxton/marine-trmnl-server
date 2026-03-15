@@ -266,6 +266,44 @@ export function createApp({ deps, paths, cfg, initialState = {} } = {}) {
     }
   });
 
+  /**
+   * Render dashboard on demand in a specific output format.
+   * Runs the full pipeline (fetch → screenshot → convert) and returns the image.
+   *
+   * GET /api/render/bmp  — 1-bit monochrome BMP3  (TRMNL Standard/Developer)
+   * GET /api/render/png  — 4-level grayscale PNG   (TRMNL OG)
+   */
+  fastify.get('/api/render/:format', async (request, reply) => {
+    const { format } = request.params;
+    const formatBitDepth = { bmp: 1, png: 2 };
+    const fmtBitDepth = formatBitDepth[format];
+
+    if (fmtBitDepth === undefined) {
+      return reply.code(400).send({ error: `Unsupported format "${format}". Supported: bmp, png` });
+    }
+
+    const rawPath  = resolve(screensDir, `render_${format}_raw.png`);
+    const outPath  = resolve(screensDir, `render_${format}.${format}`);
+    const mimeType = format === 'bmp' ? 'image/bmp' : 'image/png';
+
+    try {
+      fastify.log.info(`Render: generating ${format} (bitDepth=${fmtBitDepth})…`);
+      const data = await fetchAllMetrics();
+      const html = renderDashboard(data, { bitDepth: fmtBitDepth });
+      await screenshotHtml(html, rawPath);
+      await toDisplayImage(rawPath, outPath, fmtBitDepth);
+      fastify.log.info(`Render: ${format} ready ✓`);
+      return reply
+        .header('Content-Type', mimeType)
+        .header('Cache-Control', 'no-store')
+        .header('Content-Disposition', `inline; filename="dashboard.${format}"`)
+        .send(createReadStream(outPath));
+    } catch (err) {
+      fastify.log.error({ err }, `Render ${format} failed`);
+      return reply.code(503).send({ error: err.message });
+    }
+  });
+
   fastify.get('/preview', async (request, reply) => {
     return reply.type('text/html').send(buildPreviewPage(vesselConfig.name));
   });

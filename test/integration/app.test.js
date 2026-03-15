@@ -574,3 +574,77 @@ describe('GET /api/metrics', () => {
     rmSync(devDir2,          { recursive: true, force: true });
   });
 });
+
+// ─── /api/render/:format ────────────────────────────────────────────────────────
+
+describe('GET /api/render/:format', () => {
+  let fastify, dispose, tmpPaths, devDir;
+
+  before(() => {
+    tmpPaths = makeTmpPaths();
+    devDir   = mkdtempSync(join(tmpdir(), 'trmnl-devs-'));
+    ({ fastify, dispose } = createApp({
+      deps:  makeMockDeps(devDir),
+      paths: tmpPaths,
+      cfg:   makeTestCfg(),
+    }));
+  });
+
+  after(async () => {
+    dispose();
+    await fastify.close();
+    rmSync(tmpPaths.screensDir, { recursive: true, force: true });
+    rmSync(devDir,              { recursive: true, force: true });
+  });
+
+  test('returns 400 for unsupported format', async () => {
+    const res = await fastify.inject({ method: 'GET', url: '/api/render/svg' });
+    assert.equal(res.statusCode, 400);
+    assert.ok(JSON.parse(res.body).error.includes('svg'));
+  });
+
+  test('returns 200 image/bmp for /api/render/bmp', async () => {
+    const res = await fastify.inject({ method: 'GET', url: '/api/render/bmp' });
+    assert.equal(res.statusCode, 200);
+    assert.ok(res.headers['content-type'].includes('image/bmp'));
+  });
+
+  test('returns 200 image/png for /api/render/png', async () => {
+    const res = await fastify.inject({ method: 'GET', url: '/api/render/png' });
+    assert.equal(res.statusCode, 200);
+    assert.ok(res.headers['content-type'].includes('image/png'));
+  });
+
+  test('sets Cache-Control: no-store', async () => {
+    const res = await fastify.inject({ method: 'GET', url: '/api/render/bmp' });
+    assert.equal(res.headers['cache-control'], 'no-store');
+  });
+
+  test('returns 503 when fetchAllMetrics throws', async () => {
+    const tmpP   = makeTmpPaths();
+    const devDir2 = mkdtempSync(join(tmpdir(), 'trmnl-devs2-'));
+    const { fastify: f2, dispose: d2 } = createApp({
+      deps: makeMockDeps(devDir2, {
+        fetchAllMetrics: async () => { throw new Error('InfluxDB down'); },
+      }),
+      paths: tmpP,
+      cfg:   makeTestCfg(),
+    });
+    const res = await f2.inject({ method: 'GET', url: '/api/render/bmp' });
+    assert.equal(res.statusCode, 503);
+    assert.ok(JSON.parse(res.body).error.includes('InfluxDB down'));
+    d2();
+    await f2.close();
+    rmSync(tmpP.screensDir, { recursive: true, force: true });
+    rmSync(devDir2,          { recursive: true, force: true });
+  });
+
+  test('bmp and png produce separate output files', async () => {
+    await fastify.inject({ method: 'GET', url: '/api/render/bmp' });
+    await fastify.inject({ method: 'GET', url: '/api/render/png' });
+    const { existsSync } = await import('node:fs');
+    const { join: j }   = await import('node:path');
+    assert.ok(existsSync(j(tmpPaths.screensDir, 'render_bmp.bmp')), 'render_bmp.bmp should exist');
+    assert.ok(existsSync(j(tmpPaths.screensDir, 'render_png.png')), 'render_png.png should exist');
+  });
+});
