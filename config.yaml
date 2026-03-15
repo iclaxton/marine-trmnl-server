@@ -33,7 +33,7 @@ server:
 # --- InfluxDB 2.x ---
 influxdb:
   url: "${INFLUXDB_URL:-http://localhost:8086}"
-  token: "${INFLUXDB_TOKEN}"      # Set in .env
+  token: "${INFLUXDB_TOKEN:-}"    # Set in .env (empty string fallback keeps CI working)
   org: "${INFLUXDB_ORG:-my-org}"
   bucket: "${INFLUXDB_BUCKET:-signalk}"
 
