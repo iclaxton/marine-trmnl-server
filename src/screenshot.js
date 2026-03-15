@@ -1,12 +1,15 @@
 /**
  * screenshot.js — renders an HTML string to a PNG using a headless browser.
  *
- * Uses puppeteer-core pointed at the system Chromium install (no bundled binary).
+ * Uses Chromium's built-in --screenshot CLI flag rather than Puppeteer's CDP
+ * API. This avoids all Emulation/Runtime CDP calls that crash Raspberry Pi
+ * Chromium 126 on Debian 11.
+ *
  * On the Raspberry Pi:   sudo apt install chromium-browser
- * On macOS (dev):        Ensure Google Chrome is installed
+ * On macOS (dev):        Ensure Google Chrome or Brave is installed
  */
 
-import puppeteer from 'puppeteer-core';
+import { spawnSync } from 'node:child_process';
 import { platform, tmpdir } from 'node:os';
 import { existsSync, writeFileSync, unlinkSync, mkdtempSync, rmdirSync } from 'node:fs';
 import { join } from 'node:path';
@@ -18,33 +21,12 @@ const HEIGHT = 480;
 /** Hard timeout (ms) for the entire screenshot operation */
 const SCREENSHOT_TIMEOUT_MS = 30_000;
 
-/**
- * Chromium launch flags tuned for Raspberry Pi 4 / headless Linux.
- *
- * --disable-dev-shm-usage   Critical on Pi — default 64MB /dev/shm causes crashes.
- * --window-size             Sets viewport via OS window rather than CDP
- *                           Emulation API, avoiding "Emulation.setTouchEmulationEnabled:
- *                           Session closed" errors on Pi's older Chromium.
- * Note: --disable-software-rasterizer must NOT be combined with --disable-gpu;
- * together they leave no rendering backend and crash Chromium on startup.
- */
-const CHROMIUM_ARGS = [
-  '--no-sandbox',
-  '--disable-setuid-sandbox',
-  '--disable-dev-shm-usage',
-  '--disable-gpu',
-  `--window-size=${WIDTH},${HEIGHT}`,
-];
-
 function resolveChromiumPath() {
-  // CHROMIUM_PATH env var takes highest priority — useful for local dev
-  // without modifying config.yaml (set it in .env).
   if (process.env.CHROMIUM_PATH) return process.env.CHROMIUM_PATH;
 
   const configured = byosConfig?.chromiumPath;
   if (configured && existsSync(configured)) return configured;
 
-  // Auto-detect by OS as a final fallback.
   // On Pi Bookworm the binary is 'chromium'; older Pi OS uses 'chromium-browser'.
   if (platform() === 'linux') {
     for (const p of ['/usr/bin/chromium', '/usr/bin/chromium-browser']) {
@@ -70,39 +52,37 @@ function resolveChromiumPath() {
 export async function screenshotHtml(html, outputPath) {
   const executablePath = resolveChromiumPath();
 
-  const browser = await puppeteer.launch({
-    executablePath,
-    args: CHROMIUM_ARGS,
-    headless: true,
-    // null disables Puppeteer's CDP-based viewport management entirely,
-    // avoiding Emulation.setTouchEmulationEnabled calls that crash on Pi.
-    defaultViewport: null,
-    timeout: SCREENSHOT_TIMEOUT_MS,
-  });
-
-  // Write HTML to a temp file and navigate with page.goto('file://...').
-  // page.setContent() uses Runtime.callFunctionOn internally; page.goto() uses
-  // the Page navigation protocol which is far more compatible with Pi Chromium.
+  // Write HTML to a temp file — Chromium CLI requires a file:// URL.
   const tmpDir = mkdtempSync(join(tmpdir(), 'trmnl-'));
   const tmpFile = join(tmpDir, 'dashboard.html');
 
   try {
     writeFileSync(tmpFile, html, 'utf8');
 
-    const page = await browser.newPage();
-    // Do NOT call page.setJavaScriptEnabled() — it uses Emulation.setScriptExecutionDisabled
-    // which also crashes on Pi.
-
-    await page.goto(`file://${tmpFile}`, { waitUntil: 'load', timeout: SCREENSHOT_TIMEOUT_MS });
-
-    await page.screenshot({
-      path: outputPath,
-      type: 'png',
-      clip: { x: 0, y: 0, width: WIDTH, height: HEIGHT },
-      omitBackground: false,
+    // Use Chromium's --screenshot flag — no Puppeteer CDP session at all.
+    // --screenshot=PATH writes directly to the given path.
+    const result = spawnSync(executablePath, [
+      '--headless',
+      '--no-sandbox',
+      '--disable-setuid-sandbox',
+      '--disable-dev-shm-usage',
+      '--disable-gpu',
+      `--window-size=${WIDTH},${HEIGHT}`,
+      `--screenshot=${outputPath}`,
+      `file://${tmpFile}`,
+    ], {
+      timeout: SCREENSHOT_TIMEOUT_MS,
+      encoding: 'utf8',
     });
+
+    if (result.error) {
+      throw new Error(`Chromium failed to launch: ${result.error.message}`);
+    }
+    if (result.status !== 0) {
+      const detail = (result.stderr || '').slice(-500) || 'unknown error';
+      throw new Error(`Chromium exited with code ${result.status}: ${detail}`);
+    }
   } finally {
-    await browser.close();
     try { unlinkSync(tmpFile); } catch { /* ignore */ }
     try { rmdirSync(tmpDir); } catch { /* ignore */ }
   }
