@@ -10,7 +10,7 @@
 byos:
   # Base URL of THIS server, as the TRMNL device will see it on your network.
   # Set this to your Pi's IP address (or hostname) and port.
-  baseUrl: "http://<your-pi-ip>:3001"
+  baseUrl: "${BYOS_BASE_URL:-http://localhost:3002}"
 
   # Absolute path to Chromium/Chrome executable for headless screenshots.
   # Defaults to the Raspberry Pi path; override via CHROMIUM_PATH in .env for local dev.
@@ -27,7 +27,7 @@ vessel:
 
 # --- Server ---
 server:
-  port: 3001
+  port: ${SERVER_PORT:-3002}
   host: "0.0.0.0"
 
 # --- InfluxDB 2.x ---

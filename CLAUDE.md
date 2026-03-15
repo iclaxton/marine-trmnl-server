@@ -3,7 +3,7 @@
 ## Project Purpose
 
 BYOS (Bring-Your-Own-Server) API for a [TRMNL](https://usetrmnl.com/) e-ink display mounted aboard
-a sailing vessel. Runs on a Raspberry Pi on the vessel's local network (port 3001).
+a sailing vessel. Runs on a Raspberry Pi on the vessel's local network (default port 3002).
 
 **Data pipeline:**
 ```

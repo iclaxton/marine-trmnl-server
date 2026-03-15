@@ -46,6 +46,11 @@ function loadConfig() {
 
 export const config = loadConfig();
 
+// server.port must be a number (env vars are always strings after interpolation)
+if (config.server?.port !== undefined) {
+  config.server.port = parseInt(config.server.port, 10);
+}
+
 // Convenience accessors
 export const byosConfig    = config.byos;
 export const displayConfig = config.display;

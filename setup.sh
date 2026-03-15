@@ -269,6 +269,8 @@ INFLUXDB_URL_DEFAULT="http://localhost:8086"
 INFLUXDB_TOKEN_DEFAULT=""
 INFLUXDB_ORG_DEFAULT="my-org"
 INFLUXDB_BUCKET_DEFAULT="signalk"
+SERVER_PORT_DEFAULT="3002"
+BYOS_BASE_URL_DEFAULT=""
 
 if [[ -f .env ]]; then
   while IFS='=' read -r _k _v; do
@@ -280,6 +282,8 @@ if [[ -f .env ]]; then
       INFLUXDB_TOKEN)  INFLUXDB_TOKEN_DEFAULT="$_v" ;;
       INFLUXDB_ORG)    INFLUXDB_ORG_DEFAULT="$_v" ;;
       INFLUXDB_BUCKET) INFLUXDB_BUCKET_DEFAULT="$_v" ;;
+      SERVER_PORT)     SERVER_PORT_DEFAULT="$_v" ;;
+      BYOS_BASE_URL)   BYOS_BASE_URL_DEFAULT="$_v" ;;
     esac
   done < .env
   info "Existing .env found — current values shown as defaults. Press Enter to keep."
@@ -290,7 +294,15 @@ info "Press Enter to accept the [default] shown in brackets."
 echo ""
 
 VESSEL_NAME=$(prompt "VESSEL_NAME" "Vessel name (shown on dashboard)" "$VESSEL_NAME_DEFAULT")
-INFLUXDB_URL=$(prompt "INFLUXDB_URL" "InfluxDB URL" "$INFLUXDB_URL_DEFAULT")
+
+  # Determine hostname for baseUrl default
+  if [[ -z "$BYOS_BASE_URL_DEFAULT" ]]; then
+    _HOSTNAME=$(hostname -f 2>/dev/null || hostname)
+    BYOS_BASE_URL_DEFAULT="http://${_HOSTNAME}:${SERVER_PORT_DEFAULT}"
+  fi
+
+  SERVER_PORT=$(prompt "SERVER_PORT" "Server port (must not conflict with other services e.g. Grafana uses 3000)" "$SERVER_PORT_DEFAULT")
+  BYOS_BASE_URL=$(prompt "BYOS_BASE_URL" "BYOS base URL (how the TRMNL device reaches this server)" "${BYOS_BASE_URL_DEFAULT//:${SERVER_PORT_DEFAULT}/:${SERVER_PORT}}")
 INFLUXDB_TOKEN=$(prompt "INFLUXDB_TOKEN" "InfluxDB API token (from InfluxDB UI → API Tokens)" "$INFLUXDB_TOKEN_DEFAULT")
 INFLUXDB_ORG=$(prompt "INFLUXDB_ORG" "InfluxDB organisation name" "$INFLUXDB_ORG_DEFAULT")
 INFLUXDB_BUCKET=$(prompt "INFLUXDB_BUCKET" "InfluxDB bucket name" "$INFLUXDB_BUCKET_DEFAULT")
@@ -310,6 +322,9 @@ cat > .env <<EOF
 # See .env.example for documentation of each variable.
 
 VESSEL_NAME=${VESSEL_NAME}
+
+SERVER_PORT=${SERVER_PORT}
+BYOS_BASE_URL=${BYOS_BASE_URL}
 
 INFLUXDB_URL=${INFLUXDB_URL}
 INFLUXDB_TOKEN=${INFLUXDB_TOKEN}
@@ -398,6 +413,9 @@ while true; do
 # Updated by setup.sh on $(date)
 
 VESSEL_NAME=${VESSEL_NAME}
+
+SERVER_PORT=${SERVER_PORT}
+BYOS_BASE_URL=${BYOS_BASE_URL}
 
 INFLUXDB_URL=${INFLUXDB_URL}
 INFLUXDB_TOKEN=${INFLUXDB_TOKEN}
@@ -534,9 +552,9 @@ echo -e "${GREEN}${BOLD}══════════════════�
 echo -e "${GREEN}${BOLD}  Setup complete!${RESET}"
 echo -e "${GREEN}${BOLD}════════════════════════════════════════${RESET}"
 echo ""
-echo -e "  Server:       ${CYAN}http://localhost:3001${RESET}"
-echo -e "  BYOS display: ${CYAN}http://localhost:3001/api/display${RESET}"
-echo -e "  Preview:      ${CYAN}http://localhost:3001/preview${RESET}"
+echo -e "  Server:       ${CYAN}${BYOS_BASE_URL:-http://localhost:${SERVER_PORT:-3002}}${RESET}"
+echo -e "  BYOS display: ${CYAN}${BYOS_BASE_URL:-http://localhost:${SERVER_PORT:-3002}}/api/display${RESET}"
+echo -e "  Preview:      ${CYAN}${BYOS_BASE_URL:-http://localhost:${SERVER_PORT:-3002}}/preview${RESET}"
 echo ""
 if [[ "${WRITE_ENV:-false}" == "true" ]] && [[ -z "${INFLUXDB_TOKEN:-}" ]]; then
   warn "INFLUXDB_TOKEN is not set. Edit .env and add your token, then restart."
