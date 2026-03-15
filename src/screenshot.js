@@ -8,20 +8,22 @@
 
 import puppeteer from 'puppeteer-core';
 import { platform } from 'node:os';
+import { existsSync } from 'node:fs';
 import { byosConfig } from './config.js';
 
-const VIEWPORT = { width: 800, height: 480, deviceScaleFactor: 1 };
+const WIDTH = 800;
+const HEIGHT = 480;
 
 /** Hard timeout (ms) for the entire screenshot operation */
 const SCREENSHOT_TIMEOUT_MS = 30_000;
 
 /**
  * Chromium launch flags tuned for Raspberry Pi 4 / headless Linux.
- * --disable-dev-shm-usage is critical on Pi — the default 64MB /dev/shm
- * causes Chromium to crash when rendering anything substantial.
- * --run-all-compositor-stages-before-draw is intentionally omitted — it is
- * not supported by Raspberry Pi's older Chromium builds and causes an
- * immediate crash ("Target closed").
+ *
+ * --disable-dev-shm-usage   Critical on Pi — default 64MB /dev/shm causes crashes.
+ * --window-size             Sets viewport via OS window rather than CDP
+ *                           Emulation API, avoiding "Emulation.setTouchEmulationEnabled:
+ *                           Session closed" errors on Pi's older Chromium.
  */
 const CHROMIUM_ARGS = [
   '--no-sandbox',
@@ -29,6 +31,7 @@ const CHROMIUM_ARGS = [
   '--disable-dev-shm-usage',
   '--disable-gpu',
   '--disable-software-rasterizer',
+  `--window-size=${WIDTH},${HEIGHT}`,
 ];
 
 function resolveChromiumPath() {
@@ -37,11 +40,18 @@ function resolveChromiumPath() {
   if (process.env.CHROMIUM_PATH) return process.env.CHROMIUM_PATH;
 
   const configured = byosConfig?.chromiumPath;
-  if (configured) return configured;
+  if (configured && existsSync(configured)) return configured;
 
-  // Auto-detect by OS as a final fallback
-  if (platform() === 'linux')  return '/usr/bin/chromium-browser';
-  if (platform() === 'darwin') return '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+  // Auto-detect by OS as a final fallback.
+  // On Pi Bookworm the binary is 'chromium'; older Pi OS uses 'chromium-browser'.
+  if (platform() === 'linux') {
+    for (const p of ['/usr/bin/chromium', '/usr/bin/chromium-browser']) {
+      if (existsSync(p)) return p;
+    }
+  }
+  if (platform() === 'darwin') {
+    return '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+  }
 
   throw new Error(
     'Cannot auto-detect Chromium. Set CHROMIUM_PATH in .env or byos.chromiumPath in config.yaml'
@@ -64,26 +74,25 @@ export async function screenshotHtml(html, outputPath) {
     // 'shell' uses the classic --headless flag, better supported by the
     // Raspberry Pi's older Chromium build than the newer headless mode.
     headless: 'shell',
+    // null disables Puppeteer's CDP-based viewport management entirely,
+    // avoiding Emulation.setTouchEmulationEnabled calls that crash on Pi.
+    defaultViewport: null,
     timeout: SCREENSHOT_TIMEOUT_MS,
   });
 
   try {
     const page = await browser.newPage();
 
-    await page.setViewport(VIEWPORT);
-
     // Our dashboard is pure HTML + inline CSS + inline SVG — no JS needed.
     // Disabling JS speeds up rendering and avoids any accidental network calls.
     await page.setJavaScriptEnabled(false);
 
-    // Load the HTML string directly (no temp file needed).
-    // 'networkidle0' would wait for network, 'load' fires when DOM is ready.
     await page.setContent(html, { waitUntil: 'load', timeout: SCREENSHOT_TIMEOUT_MS });
 
     await page.screenshot({
       path: outputPath,
       type: 'png',
-      clip: { x: 0, y: 0, width: VIEWPORT.width, height: VIEWPORT.height },
+      clip: { x: 0, y: 0, width: WIDTH, height: HEIGHT },
       omitBackground: false,
     });
   } finally {
