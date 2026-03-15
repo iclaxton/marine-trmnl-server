@@ -80,10 +80,10 @@ prompt() {
   local value
 
   if [[ -n "$default_val" ]]; then
-    read -rp "$(echo -e "${BOLD}${prompt_text}${RESET} [${CYAN}${default_val}${RESET}]: ")" value
+    read -rp "$(echo -e "${BOLD}${prompt_text}${RESET} [${CYAN}${default_val}${RESET}]: ")" value </dev/tty
     echo "${value:-$default_val}"
   else
-    read -rp "$(echo -e "${BOLD}${prompt_text}${RESET}: ")" value
+    read -rp "$(echo -e "${BOLD}${prompt_text}${RESET}: ")" value </dev/tty
     echo "$value"
   fi
 }
@@ -95,7 +95,7 @@ prompt_yesno() {
   if [[ "$default" == "y" ]]; then yn_hint="[Y/n]"; else yn_hint="[y/N]"; fi
 
   local answer
-  read -rp "$(echo -e "${BOLD}${prompt_text}${RESET} ${yn_hint}: ")" answer
+  read -rp "$(echo -e "${BOLD}${prompt_text}${RESET} ${yn_hint}: ")" answer </dev/tty
   answer="${answer:-$default}"
   [[ "$answer" =~ ^[Yy]$ ]]
 }
@@ -111,7 +111,7 @@ if [[ ! -f "$SCRIPT_DIR/src/server.js" ]]; then
   fi
 
   INSTALL_DIR_DEFAULT="$HOME/marine-trmnl-server"
-  read -rp "$(echo -e "${BOLD}Install directory${RESET} [${CYAN}${INSTALL_DIR_DEFAULT}${RESET}]: ")" _install_input
+  read -rp "$(echo -e "${BOLD}Install directory${RESET} [${CYAN}${INSTALL_DIR_DEFAULT}${RESET}]: ")" _install_input </dev/tty
   INSTALL_DIR="${_install_input:-$INSTALL_DIR_DEFAULT}"
 
   if [[ -d "$INSTALL_DIR/.git" ]]; then
