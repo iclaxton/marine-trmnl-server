@@ -1,6 +1,6 @@
 # Marine TRMNL Server
 
-[![CI](https://github.com/YOUR_GITHUB_USERNAME/marine-trmnl-server/actions/workflows/ci.yml/badge.svg)](https://github.com/YOUR_GITHUB_USERNAME/marine-trmnl-server/actions/workflows/ci.yml)
+[![CI](https://github.com/iclaxton/marine-trmnl-server/actions/workflows/ci.yml/badge.svg)](https://github.com/iclaxton/marine-trmnl-server/actions/workflows/ci.yml)
 
 A lightweight Node.js server for a Raspberry Pi that generates a marine
 dashboard for the [TRMNL](https://usetrmnl.com) e-ink display.
@@ -230,7 +230,7 @@ every push to `main`:
 
 ```bash
 # Pull the latest pre-built image (amd64 or arm64 auto-selected)
-docker pull ghcr.io/YOUR_GITHUB_USERNAME/marine-trmnl-server:latest
+docker pull ghcr.io/iclaxton/marine-trmnl-server:latest
 ```
 
 Or build locally:
