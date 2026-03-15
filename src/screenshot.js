@@ -10,7 +10,7 @@ import puppeteer from 'puppeteer-core';
 import { platform } from 'node:os';
 import { byosConfig } from './config.js';
 
-const VIEWPORT = { width: 800, height: 480, deviceScaleFactor: 2 };
+const VIEWPORT = { width: 800, height: 480, deviceScaleFactor: 1 };
 
 /** Hard timeout (ms) for the entire screenshot operation */
 const SCREENSHOT_TIMEOUT_MS = 30_000;
@@ -19,6 +19,9 @@ const SCREENSHOT_TIMEOUT_MS = 30_000;
  * Chromium launch flags tuned for Raspberry Pi 4 / headless Linux.
  * --disable-dev-shm-usage is critical on Pi — the default 64MB /dev/shm
  * causes Chromium to crash when rendering anything substantial.
+ * --run-all-compositor-stages-before-draw is intentionally omitted — it is
+ * not supported by Raspberry Pi's older Chromium builds and causes an
+ * immediate crash ("Target closed").
  */
 const CHROMIUM_ARGS = [
   '--no-sandbox',
@@ -26,10 +29,6 @@ const CHROMIUM_ARGS = [
   '--disable-dev-shm-usage',
   '--disable-gpu',
   '--disable-software-rasterizer',
-  '--run-all-compositor-stages-before-draw',
-  // Note: --virtual-time-budget must NOT be used here — it causes Chromium to
-  // close the page session before Puppeteer can call screenshot(), producing
-  // "Protocol error (Emulation.setTouchEmulationEnabled): Session closed."
 ];
 
 function resolveChromiumPath() {
@@ -62,9 +61,9 @@ export async function screenshotHtml(html, outputPath) {
   const browser = await puppeteer.launch({
     executablePath,
     args: CHROMIUM_ARGS,
-    headless: true,
-    // Avoid sandbox issues when running as root (e.g. in Docker or some Pi setups)
-    ignoreDefaultArgs: ['--disable-extensions'],
+    // 'shell' uses the classic --headless flag, better supported by the
+    // Raspberry Pi's older Chromium build than the newer headless mode.
+    headless: 'shell',
     timeout: SCREENSHOT_TIMEOUT_MS,
   });
 
