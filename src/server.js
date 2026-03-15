@@ -10,7 +10,7 @@ import { fileURLToPath } from 'node:url';
 
 import { createApp } from './app.js';
 import { fetchAllMetrics } from './influx.js';
-import { renderDashboard, renderSetupScreen } from './renderer.js';
+import { renderDashboard, renderSetupScreen, buildPreviewPage } from './renderer.js';
 import { screenshotHtml } from './screenshot.js';
 import { toDisplayImage, displayExtension, checkImageMagick } from './converter.js';
 import * as devices from './devices.js';
@@ -25,6 +25,7 @@ const { fastify, initialize } = createApp({
     fetchAllMetrics,
     renderDashboard,
     renderSetupScreen,
+    buildPreviewPage,
     screenshotHtml,
     toDisplayImage,
     displayExtension,

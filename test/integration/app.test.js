@@ -55,6 +55,8 @@ function makeMockDeps(devicesDir, overrides = {}) {
     }),
     renderDashboard:  () => '<html>mock-dashboard</html>',
     renderSetupScreen: () => '<html>mock-setup</html>',
+    buildPreviewPage: (vesselName) => `<!DOCTYPE html><html><head><title>${vesselName}</title></head><body data-preview>Loading…</body></html>`,
+
     screenshotHtml:   async () => {},
     // write a minimal dummy file to the output path so /screens/ can serve it
     toDisplayImage: async (_inputPng, outputPath) => {
@@ -442,83 +444,133 @@ describe('GET /screens/:filename', () => {
 // ─── /preview ─────────────────────────────────────────────────────────────────
 
 describe('GET /preview', () => {
-  test('returns 200 HTML when cachedHtml is already set', async () => {
-    const tmpP  = makeTmpPaths();
-    const devDir = mkdtempSync(join(tmpdir(), 'trmnl-devs-'));
-    const { fastify: f, dispose: d } = createApp({
-      deps:         makeMockDeps(devDir),
+  let fastify, dispose, tmpPaths, devDir;
+
+  before(() => {
+    tmpPaths = makeTmpPaths();
+    devDir   = mkdtempSync(join(tmpdir(), 'trmnl-devs-'));
+    ({ fastify, dispose } = createApp({
+      deps:  makeMockDeps(devDir),
+      paths: tmpPaths,
+      cfg:   makeTestCfg(),
+    }));
+  });
+
+  after(async () => {
+    dispose();
+    await fastify.close();
+    rmSync(tmpPaths.screensDir, { recursive: true, force: true });
+    rmSync(devDir,              { recursive: true, force: true });
+  });
+
+  test('returns HTTP 200', async () => {
+    const res = await fastify.inject({ method: 'GET', url: '/preview' });
+    assert.equal(res.statusCode, 200);
+  });
+
+  test('responds with text/html content-type', async () => {
+    const res = await fastify.inject({ method: 'GET', url: '/preview' });
+    assert.ok(res.headers['content-type'].includes('text/html'));
+  });
+
+  test('HTML contains vessel name in <title>', async () => {
+    const res = await fastify.inject({ method: 'GET', url: '/preview' });
+    assert.ok(res.body.includes('TESTHEBE'));
+  });
+
+  test('returns 200 regardless of dashboard ready state', async () => {
+    const tmpP   = makeTmpPaths();
+    const devDir2 = mkdtempSync(join(tmpdir(), 'trmnl-devs2-'));
+    const { fastify: f2, dispose: d2 } = createApp({
+      deps:         makeMockDeps(devDir2),
       paths:        tmpP,
       cfg:          makeTestCfg(),
-      initialState: { cachedHtml: '<html><body>hello</body></html>' },
+      initialState: { dashboardReady: false },
     });
-    const res = await f.inject({ method: 'GET', url: '/preview' });
+    const res = await f2.inject({ method: 'GET', url: '/preview' });
     assert.equal(res.statusCode, 200);
-    assert.ok(res.headers['content-type'].includes('text/html'));
-    assert.ok(res.body.includes('hello'));
-    d();
-    await f.close();
+    d2();
+    await f2.close();
     rmSync(tmpP.screensDir, { recursive: true, force: true });
-    rmSync(devDir,           { recursive: true, force: true });
+    rmSync(devDir2,          { recursive: true, force: true });
   });
+});
 
-  test('returns 200 after triggering buildDashboard via mock pipeline', async () => {
-    const tmpP   = makeTmpPaths();
-    const devDir = mkdtempSync(join(tmpdir(), 'trmnl-devs-'));
-    const { fastify: f, dispose: d } = createApp({
+// ─── /api/metrics ─────────────────────────────────────────────────────────────
+
+describe('GET /api/metrics', () => {
+  let fastify, dispose, tmpPaths, devDir;
+
+  before(() => {
+    tmpPaths = makeTmpPaths();
+    devDir   = mkdtempSync(join(tmpdir(), 'trmnl-devs-'));
+    ({ fastify, dispose } = createApp({
       deps:  makeMockDeps(devDir),
-      paths: tmpP,
+      paths: tmpPaths,
       cfg:   makeTestCfg(),
-      // no cachedHtml — preview must trigger buildDashboard
-    });
-    const res = await f.inject({ method: 'GET', url: '/preview' });
-    assert.equal(res.statusCode, 200);
-    assert.ok(res.body.includes('mock-dashboard'));
-    d();
-    await f.close();
-    rmSync(tmpP.screensDir, { recursive: true, force: true });
-    rmSync(devDir,           { recursive: true, force: true });
+    }));
   });
 
-  test('returns 503 when pipeline fails and no HTML is cached', async () => {
+  after(async () => {
+    dispose();
+    await fastify.close();
+    rmSync(tmpPaths.screensDir, { recursive: true, force: true });
+    rmSync(devDir,              { recursive: true, force: true });
+  });
+
+  test('returns HTTP 200 with JSON', async () => {
+    const res = await fastify.inject({ method: 'GET', url: '/api/metrics' });
+    assert.equal(res.statusCode, 200);
+    assert.ok(res.headers['content-type'].includes('application/json'));
+  });
+
+  test('response body has _window field', async () => {
+    const res  = await fastify.inject({ method: 'GET', url: '/api/metrics' });
+    const body = JSON.parse(res.body);
+    assert.ok('_window' in body, 'should include _window');
+  });
+
+  test('returns 503 when fetchAllMetrics throws', async () => {
     const tmpP   = makeTmpPaths();
-    const devDir = mkdtempSync(join(tmpdir(), 'trmnl-devs-'));
-    const { fastify: f, dispose: d } = createApp({
-      deps: makeMockDeps(devDir, {
+    const devDir2 = mkdtempSync(join(tmpdir(), 'trmnl-devs2-'));
+    const { fastify: f2, dispose: d2 } = createApp({
+      deps: makeMockDeps(devDir2, {
         fetchAllMetrics: async () => { throw new Error('InfluxDB unreachable'); },
       }),
       paths: tmpP,
       cfg:   makeTestCfg(),
-      // no cachedHtml
     });
-    const res = await f.inject({ method: 'GET', url: '/preview' });
+    const res = await f2.inject({ method: 'GET', url: '/api/metrics' });
     assert.equal(res.statusCode, 503);
-    assert.ok(res.body.includes('InfluxDB unreachable'));
-    d();
-    await f.close();
+    const body = JSON.parse(res.body);
+    assert.ok(body.error.includes('InfluxDB unreachable'));
+    d2();
+    await f2.close();
     rmSync(tmpP.screensDir, { recursive: true, force: true });
-    rmSync(devDir,           { recursive: true, force: true });
+    rmSync(devDir2,          { recursive: true, force: true });
   });
 
-  test('?refresh forces rebuild even with cached HTML', async () => {
-    let buildCount = 0;
+  test('returned JSON is the full metrics data object from fetchAllMetrics', async () => {
     const tmpP   = makeTmpPaths();
-    const devDir = mkdtempSync(join(tmpdir(), 'trmnl-devs-'));
-    const { fastify: f, dispose: d } = createApp({
-      deps: makeMockDeps(devDir, {
-        fetchAllMetrics: async () => {
-          buildCount++;
-          return { _window: '15m', wind: null, navigation: null, depth: null, battery: null, environment: null };
-        },
-      }),
-      paths:        tmpP,
-      cfg:          makeTestCfg(),
-      initialState: { cachedHtml: '<html>stale</html>' },
+    const devDir2 = mkdtempSync(join(tmpdir(), 'trmnl-devs2-'));
+    const mockData = {
+      _window: '15m',
+      _queriedAt: new Date().toISOString(),
+      wind: { apparentSpeed: { def: {}, stats: { last: 12.3, min: 8.0, max: 16.0, mean: 11.5 } } },
+      navigation: null, depth: null, battery: null, environment: null,
+    };
+    const { fastify: f2, dispose: d2 } = createApp({
+      deps: makeMockDeps(devDir2, { fetchAllMetrics: async () => mockData }),
+      paths: tmpP,
+      cfg:   makeTestCfg(),
     });
-    await f.inject({ method: 'GET', url: '/preview?refresh' });
-    assert.equal(buildCount, 1, 'fetchAllMetrics should have been called once');
-    d();
-    await f.close();
+    const res  = await f2.inject({ method: 'GET', url: '/api/metrics' });
+    const body = JSON.parse(res.body);
+    assert.equal(body._window, '15m');
+    assert.equal(body.wind.apparentSpeed.stats.last, 12.3);
+    d2();
+    await f2.close();
     rmSync(tmpP.screensDir, { recursive: true, force: true });
-    rmSync(devDir,           { recursive: true, force: true });
+    rmSync(devDir2,          { recursive: true, force: true });
   });
 });

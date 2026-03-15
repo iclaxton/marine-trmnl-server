@@ -598,3 +598,320 @@ body{
 </body>
 </html>`;
 }
+
+// ─── Browser preview page ─────────────────────────────────────────────────────
+
+/**
+ * Build a browser-friendly live dashboard page.
+ *
+ * The returned HTML is a complete self-contained page that uses client-side JS
+ * to fetch real-time data from GET /api/metrics, rendering all panels and
+ * auto-refreshing every 30 seconds. Unlike renderDashboard(), this page is NOT
+ * constrained to 800×480 or the e-ink colour palette.
+ *
+ * @param {string} vesselName  — displayed in the page header
+ * @returns {string}           — complete HTML string
+ */
+export function buildPreviewPage(vesselName) {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>${vesselName} \xb7 Live Dashboard</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:system-ui,-apple-system,sans-serif;background:#f0f2f5;color:#1a1a1a;min-height:100vh;display:flex;flex-direction:column}
+header{display:flex;align-items:center;justify-content:space-between;padding:14px 24px;background:#0a0a0a;color:#fff;position:sticky;top:0;z-index:10;gap:12px}
+.vessel{font-size:20px;font-weight:700;letter-spacing:0.08em}
+.header-right{display:flex;align-items:center;gap:14px}
+.status{font-size:12px;padding:4px 10px;border-radius:10px;background:rgba(255,255,255,0.1);transition:background 0.3s,color 0.3s}
+.status.ok{background:rgba(34,197,94,0.25);color:#86efac}
+.status.error{background:rgba(239,68,68,0.25);color:#fca5a5}
+.status.loading{color:#d1d5db}
+.refresh-btn{background:rgba(255,255,255,0.12);border:1px solid rgba(255,255,255,0.2);color:#fff;padding:5px 14px;border-radius:6px;cursor:pointer;font-size:13px}
+.refresh-btn:hover{background:rgba(255,255,255,0.22)}
+.dashboard{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:16px;padding:20px;flex:1}
+.card{background:#fff;border-radius:10px;padding:16px 20px;box-shadow:0 1px 4px rgba(0,0,0,0.08),0 0 0 1px rgba(0,0,0,0.04)}
+.card-title{font-size:10px;font-weight:700;letter-spacing:0.15em;text-transform:uppercase;color:#888;border-bottom:1px solid #eee;padding-bottom:8px;margin-bottom:14px}
+.big-row{display:flex;align-items:baseline;gap:8px;margin-bottom:10px}
+.mid-row{display:flex;align-items:baseline;gap:8px;margin-bottom:8px;flex-wrap:wrap}
+.lbl{font-size:10px;font-weight:700;color:#999;letter-spacing:0.1em;min-width:36px}
+.big{font-size:52px;font-weight:200;font-variant-numeric:tabular-nums;line-height:1}
+.mid{font-size:30px;font-weight:400;font-variant-numeric:tabular-nums}
+.unit{font-size:16px;color:#666}
+.bear{font-size:14px;color:#666;margin-left:2px}
+.badge{font-size:10px;font-weight:700;padding:2px 6px;border-radius:4px;border:1px solid}
+.badge.stbd{color:#16a34a;border-color:#16a34a;background:#f0fdf4}
+.badge.port{color:#dc2626;border-color:#dc2626;background:#fef2f2}
+.divider{height:1px;background:#eee;margin:10px 0}
+.stat-block{margin-top:6px}
+.stat-lbl{font-size:11px;font-weight:600;color:#aaa;margin-right:6px}
+.stat-row{font-size:12px;color:#666;margin-top:2px;font-variant-numeric:tabular-nums}
+.mn{color:#2563eb;font-weight:500}
+.av{color:#1a1a1a;font-weight:600}
+.mx{color:#dc2626;font-weight:500}
+.sep{color:#bbb;padding:0 2px}
+.nil{color:#aaa;font-style:italic}
+.dual{display:flex}
+.dual-item{flex:1;text-align:center;padding:6px 8px}
+.dual-sep{width:1px;background:#eee;margin:6px 0}
+.dual-lbl{font-size:10px;font-weight:700;color:#999;letter-spacing:0.1em;margin-bottom:6px}
+.dual-val{font-size:36px;font-weight:300;font-variant-numeric:tabular-nums;line-height:1.1}
+.small-unit{font-size:14px;color:#666}
+.battery-grid{display:flex}
+.bank{flex:1;text-align:center;padding:6px 8px}
+.bank-sep{width:1px;background:#eee;margin:6px 0}
+.bank-name{font-size:10px;font-weight:700;color:#999;letter-spacing:0.1em;margin-bottom:6px}
+.bank-v{font-size:36px;font-weight:300;font-variant-numeric:tabular-nums;line-height:1.1}
+.bank-v.good{color:#16a34a}
+.bank-v.warn{color:#d97706}
+.bank-v.alert{color:#dc2626}
+.bank-i{font-size:15px;color:#555;font-variant-numeric:tabular-nums;margin-top:2px}
+.press-section{margin-top:14px;padding-top:12px;border-top:1px solid #eee}
+.press-chart{margin:6px 0;line-height:0}
+footer{display:flex;justify-content:space-between;padding:10px 24px;font-size:11px;color:#aaa;background:#e8eaed;border-top:1px solid #ddd}
+</style>
+</head>
+<body>
+<header>
+  <div class="vessel">&#9875; ${vesselName}</div>
+  <div class="header-right">
+    <span id="status" class="status loading">Loading\u2026</span>
+    <button class="refresh-btn" onclick="doRefresh()">&#8635; Refresh</button>
+  </div>
+</header>
+<div id="dashboard" class="dashboard"></div>
+<footer>
+  <span id="footer-updated">\u2014</span>
+  <span id="footer-window">\u2014</span>
+</footer>
+<script>
+(function() {
+  'use strict';
+
+  function fmt(v, dp) {
+    return (v == null || isNaN(v)) ? '\u2014' : Number(v).toFixed(dp);
+  }
+
+  function statsRow(s, dp) {
+    if (!s) return '<span class="nil">\u2014</span>';
+    return '<span class="mn">' + fmt(s.min, dp) + '</span>' +
+           '<span class="sep"> \xb7 </span>' +
+           '<span class="av">' + fmt(s.mean, dp) + '</span>' +
+           '<span class="sep"> \xb7 </span>' +
+           '<span class="mx">' + fmt(s.max, dp) + '</span>';
+  }
+
+  function bearing(deg) {
+    if (deg == null) return '\u2014';
+    var labels = ['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'];
+    return labels[Math.round(((deg % 360) + 360) % 360 / 22.5) % 16];
+  }
+
+  function normalise(deg) {
+    if (deg == null) return { a: null, s: '' };
+    var a = ((deg % 360) + 360) % 360;
+    return a > 180 ? { a: 360 - a, s: 'PORT' } : { a: a, s: 'STBD' };
+  }
+
+  function badge(side) {
+    if (!side) return '';
+    return '<span class="badge ' + (side === 'STBD' ? 'stbd' : 'port') + '">' + side + '</span>';
+  }
+
+  function sparklineSvg(series) {
+    if (!series || series.length < 2) return '';
+    var W = 240, H = 44;
+    var vs = series.map(function(p) { return p.v; });
+    var yMin = Math.min.apply(null, vs), yMax = Math.max.apply(null, vs);
+    if (yMin === yMax) { yMin -= 1; yMax += 1; }
+    var tMin = series[0].t, tMax = series[series.length - 1].t;
+    function toX(t) { return ((t - tMin) / (tMax - tMin || 1)) * (W - 2) + 1; }
+    function toY(v) { return H - 2 - ((v - yMin) / (yMax - yMin)) * (H - 4); }
+    var pts = series.map(function(p) { return toX(p.t).toFixed(1) + ',' + toY(p.v).toFixed(1); }).join(' ');
+    var last = series[series.length - 1];
+    var lx = toX(last.t).toFixed(1), ly = toY(last.v).toFixed(1);
+    return '<svg width="' + W + '" height="' + H + '" viewBox="0 0 ' + W + ' ' + H + '">' +
+      '<polygon points="1,' + H + ' ' + pts + ' ' + lx + ',' + H + '" fill="rgba(59,130,246,0.12)" stroke="none"/>' +
+      '<polyline points="' + pts + '" fill="none" stroke="#3b82f6" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/>' +
+      '<circle cx="' + lx + '" cy="' + ly + '" r="2.5" fill="#2563eb"/>' +
+      '<text x="2" y="' + (H - 2) + '" font-size="8" font-family="system-ui,sans-serif" fill="#aaa">12h ago</text>' +
+      '<text x="' + (W - 2) + '" y="' + (H - 2) + '" font-size="8" font-family="system-ui,sans-serif" fill="#aaa" text-anchor="end">now</text>' +
+      '</svg>';
+  }
+
+  function card(title, body) {
+    return '<div class="card"><div class="card-title">' + title + '</div>' + body + '</div>';
+  }
+
+  function renderWind(d) {
+    if (!d.wind) return card('WIND', '<p class="nil">No data</p>');
+    var w = d.wind;
+    var awLast  = w.apparentSpeed  && w.apparentSpeed.stats  ? w.apparentSpeed.stats.last  : null;
+    var awaLast = w.apparentAngle  && w.apparentAngle.stats  ? w.apparentAngle.stats.last  : null;
+    var twLast  = w.trueSpeed      && w.trueSpeed.stats      ? w.trueSpeed.stats.last      : null;
+    var twaDeg  = w.trueAngle      && w.trueAngle.stats      ? w.trueAngle.stats.last      : null;
+    var awa = normalise(awaLast);
+    var twa = normalise(twaDeg);
+    return card('WIND',
+      '<div class="big-row">' +
+        '<span class="lbl">AWS</span>' +
+        '<span class="big">' + fmt(awLast, 1) + '</span>' +
+        '<span class="unit">kts</span>' +
+      '</div>' +
+      '<div class="mid-row">' +
+        '<span class="lbl">AWA</span>' +
+        '<span class="mid">' + fmt(awa.a, 0) + '\xb0</span>' +
+        badge(awa.s) +
+      '</div>' +
+      '<div class="stat-block">' +
+        '<div class="stat-row"><span class="stat-lbl">AWS min\xb7avg\xb7max</span>' + statsRow(w.apparentSpeed && w.apparentSpeed.stats, 1) + ' kts</div>' +
+        '<div class="stat-row"><span class="stat-lbl">AWA min\xb7avg\xb7max</span>' + statsRow(w.apparentAngle && w.apparentAngle.stats, 0) + '\xb0</div>' +
+      '</div>' +
+      '<div class="divider"></div>' +
+      '<div class="mid-row">' +
+        '<span class="lbl">TWS</span><span class="mid">' + fmt(twLast, 1) + '</span><span class="unit">kts</span>' +
+        '<span class="lbl" style="margin-left:14px">TWA</span><span class="mid">' + fmt(twa.a, 0) + '\xb0</span>' +
+        badge(twa.s) +
+      '</div>' +
+      '<div class="stat-block">' +
+        '<div class="stat-row"><span class="stat-lbl">TWS min\xb7avg\xb7max</span>' + statsRow(w.trueSpeed && w.trueSpeed.stats, 1) + ' kts</div>' +
+        '<div class="stat-row"><span class="stat-lbl">TWA min\xb7avg\xb7max</span>' + statsRow(w.trueAngle && w.trueAngle.stats, 0) + '\xb0</div>' +
+      '</div>'
+    );
+  }
+
+  function renderNavigation(d) {
+    if (!d.navigation) return card('NAVIGATION', '<p class="nil">No data</p>');
+    var n = d.navigation;
+    var sog = n.sog     && n.sog.stats     ? n.sog.stats.last     : null;
+    var cog = n.cog     && n.cog.stats     ? n.cog.stats.last     : null;
+    var hdg = n.heading && n.heading.stats ? n.heading.stats.last : null;
+    return card('NAVIGATION',
+      '<div class="big-row">' +
+        '<span class="lbl">SOG</span>' +
+        '<span class="big">' + fmt(sog, 1) + '</span>' +
+        '<span class="unit">kts</span>' +
+      '</div>' +
+      '<div class="mid-row">' +
+        '<span class="lbl">COG</span><span class="mid">' + fmt(cog, 0) + '\xb0</span>' +
+        '<span class="bear">' + bearing(cog) + '</span>' +
+        '<span class="lbl" style="margin-left:16px">HDG</span><span class="mid">' + fmt(hdg, 0) + '\xb0</span>' +
+        '<span class="bear">' + bearing(hdg) + '</span>' +
+      '</div>' +
+      '<div class="stat-block">' +
+        '<div class="stat-row"><span class="stat-lbl">SOG min\xb7avg\xb7max</span>' + statsRow(n.sog && n.sog.stats, 1) + ' kts</div>' +
+        '<div class="stat-row"><span class="stat-lbl">COG min\xb7avg\xb7max</span>' + statsRow(n.cog && n.cog.stats, 0) + '\xb0</div>' +
+      '</div>'
+    );
+  }
+
+  function renderDepth(d) {
+    if (!d.depth) return card('DEPTH & WATER', '<p class="nil">No data</p>');
+    var dep   = d.depth;
+    var depth = dep.belowKeel && dep.belowKeel.stats ? dep.belowKeel.stats.last : null;
+    var wtemp = dep.waterTemp && dep.waterTemp.stats ? dep.waterTemp.stats.last : null;
+    return card('DEPTH & WATER',
+      '<div class="dual">' +
+        '<div class="dual-item">' +
+          '<div class="dual-lbl">DEPTH</div>' +
+          '<div class="dual-val">' + fmt(depth, 1) + '<span class="small-unit"> m</span></div>' +
+          '<div class="stat-row">' + statsRow(dep.belowKeel && dep.belowKeel.stats, 1) + ' m</div>' +
+        '</div>' +
+        '<div class="dual-sep"></div>' +
+        '<div class="dual-item">' +
+          '<div class="dual-lbl">WATER TEMP</div>' +
+          '<div class="dual-val">' + fmt(wtemp, 1) + '<span class="small-unit"> \xb0C</span></div>' +
+          '<div class="stat-row">' + statsRow(dep.waterTemp && dep.waterTemp.stats, 1) + ' \xb0C</div>' +
+        '</div>' +
+      '</div>'
+    );
+  }
+
+  function renderBattery(d) {
+    var banks = (d._banksMeta) || [];
+    if (!d.battery || !banks.length) return card('BATTERY', '<p class="nil">No data</p>');
+    var html = banks.map(function(bank) {
+      var bk = d.battery[bank.id + '_voltage'];
+      var bi = d.battery[bank.id + '_current'];
+      var v  = bk && bk.stats ? bk.stats.last : null;
+      var i  = bi && bi.stats ? bi.stats.last : null;
+      var vc = v == null ? '' : v >= 12.6 ? 'good' : v >= 12.2 ? 'warn' : 'alert';
+      return '<div class="bank">' +
+        '<div class="bank-name">' + bank.label + '</div>' +
+        '<div class="bank-v ' + vc + '">' + fmt(v, 1) + '<span class="small-unit"> V</span></div>' +
+        (i != null ? '<div class="bank-i">' + (i >= 0 ? '+' : '') + fmt(i, 1) + ' A</div>' : '') +
+        '<div class="stat-row">' + statsRow(bk && bk.stats, 1) + ' V</div>' +
+      '</div>';
+    }).join('<div class="bank-sep"></div>');
+    return card('BATTERY', '<div class="battery-grid">' + html + '</div>');
+  }
+
+  function renderEnvironment(d) {
+    var cabin    = d.environment && d.environment.insideTemp && d.environment.insideTemp.stats
+      ? d.environment.insideTemp.stats.last : null;
+    var pressure = d.environment && d.environment.outsidePressure;
+    var pressHtml = '';
+    if (pressure) {
+      pressHtml =
+        '<div class="press-section">' +
+          '<div class="card-title" style="border:none;padding-bottom:4px;margin-bottom:4px">PRESSURE \xb7 12h (hPa)</div>' +
+          (pressure.series ? '<div class="press-chart">' + sparklineSvg(pressure.series) + '</div>' : '') +
+          '<div class="stat-row">min\xb7avg\xb7max: ' + statsRow(pressure.stats, 0) + ' hPa</div>' +
+          '<div class="stat-row" style="margin-top:4px">Now: <strong>' + fmt(pressure.stats && pressure.stats.last, 0) + ' hPa</strong></div>' +
+        '</div>';
+    }
+    return card('ENVIRONMENT',
+      '<div class="big-row">' +
+        '<span class="lbl">CABIN</span>' +
+        '<span class="big">' + fmt(cabin, 1) + '</span>' +
+        '<span class="unit">\xb0C</span>' +
+      '</div>' +
+      '<div class="stat-row"><span class="stat-lbl">min\xb7avg\xb7max</span>' + statsRow(d.environment && d.environment.insideTemp && d.environment.insideTemp.stats, 1) + ' \xb0C</div>' +
+      pressHtml
+    );
+  }
+
+  function renderAll(data) {
+    var html = renderWind(data) +
+               renderNavigation(data) +
+               renderDepth(data) +
+               renderBattery(data) +
+               renderEnvironment(data);
+    document.getElementById('dashboard').innerHTML = html;
+    document.getElementById('footer-window').textContent = 'Window: ' + (data._window || '\u2014');
+    document.getElementById('footer-updated').textContent = 'Updated: ' + new Date().toLocaleTimeString();
+  }
+
+  var refreshTimer = null;
+
+  function doRefresh() {
+    var statusEl = document.getElementById('status');
+    statusEl.textContent = 'Refreshing\u2026';
+    statusEl.className = 'status loading';
+    fetch('/api/metrics')
+      .then(function(res) {
+        if (!res.ok) return res.text().then(function(t) { throw new Error('HTTP ' + res.status + ': ' + t); });
+        return res.json();
+      })
+      .then(function(data) {
+        renderAll(data);
+        statusEl.textContent = '\u25cf Live';
+        statusEl.className = 'status ok';
+      })
+      .catch(function(err) {
+        statusEl.textContent = '\u2717 ' + err.message;
+        statusEl.className = 'status error';
+      });
+  }
+
+  window.doRefresh = doRefresh;
+
+  doRefresh();
+  refreshTimer = setInterval(doRefresh, 30000);
+})();
+</script>
+</body>
+</html>`;
+}

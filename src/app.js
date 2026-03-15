@@ -27,6 +27,7 @@ import { resolve, extname } from 'node:path';
  *     fetchAllMetrics: Function,
  *     renderDashboard: Function,
  *     renderSetupScreen: Function,
+ *     buildPreviewPage: Function,
  *     screenshotHtml: Function,
  *     toDisplayImage: Function,
  *     displayExtension: Function,
@@ -59,6 +60,7 @@ export function createApp({ deps, paths, cfg, initialState = {} } = {}) {
     fetchAllMetrics,
     renderDashboard,
     renderSetupScreen,
+    buildPreviewPage,
     screenshotHtml,
     toDisplayImage,
     displayExtension,
@@ -254,18 +256,18 @@ export function createApp({ deps, paths, cfg, initialState = {} } = {}) {
     return reply.code(204).send();
   });
 
+  fastify.get('/api/metrics', async (request, reply) => {
+    try {
+      const data = await fetchAllMetrics();
+      return reply.send(data);
+    } catch (err) {
+      fastify.log.error({ err }, 'Metrics fetch failed');
+      return reply.code(503).send({ error: err.message });
+    }
+  });
+
   fastify.get('/preview', async (request, reply) => {
-    if ('refresh' in request.query || !cachedHtml) {
-      await buildDashboard();
-    }
-
-    if (!cachedHtml) {
-      return reply.code(503).type('text/plain').send(
-        `Dashboard not yet available.\n${lastError ?? 'No data fetched yet.'}`
-      );
-    }
-
-    return reply.type('text/html').send(cachedHtml);
+    return reply.type('text/html').send(buildPreviewPage(vesselConfig.name));
   });
 
   fastify.get('/health', async (request, reply) => {
