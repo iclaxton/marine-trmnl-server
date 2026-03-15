@@ -1,0 +1,13 @@
+services:
+  marine-trmnl-server:
+    build: .
+    # For Raspberry Pi, add: platform: linux/arm64
+    ports:
+      - "3001:3001"
+    env_file:
+      - .env                        # provides INFLUXDB_TOKEN
+    volumes:
+      - ./config.yaml:/app/config.yaml:ro   # edit locally, read-only in container
+      - ./screens:/app/screens              # generated images
+      - ./data:/app/data                    # device registry (devices.json)
+    restart: unless-stopped

@@ -142,6 +142,7 @@ SignalK stores SI values. Configure `conversion` in `config.yaml`:
 | `rad_to_deg` | radians → degrees (0–360) |
 | `kelvin_to_c` | Kelvin → Celsius |
 | `kelvin_to_f` | Kelvin → Fahrenheit |
+| `pa_to_hpa` | Pascals → hectopascals (mbar) |
 
 ---
 
@@ -217,6 +218,36 @@ npm start
 # Open http://<pi-ip>:3001/preview in a browser
 ```
 
+### Docker deployment (alternative to bare-metal)
+
+Docker handles Node.js, Chromium and ImageMagick automatically — no manual
+`apt install` needed. The image works on both Raspberry Pi (arm64) and x86.
+
+```bash
+# 1. Copy and edit your config
+cp .env.example .env
+nano .env          # Add INFLUXDB_TOKEN
+nano config.yaml   # Set baseUrl, vessel name, InfluxDB settings
+
+# 2. Build and start
+docker compose up -d
+
+# 3. View logs
+docker compose logs -f
+```
+
+> **Raspberry Pi (arm64):** uncomment `platform: linux/arm64` in
+> `docker-compose.yml`, or build natively on the Pi (recommended — avoids
+> emulation overhead).
+
+The container automatically mounts `./config.yaml`, `./screens/` and
+`./data/` from your project directory, so no rebuild is needed after config
+changes — just restart:
+
+```bash
+docker compose restart
+```
+
 ### Connect your TRMNL device
 
 1. Hold the button on the TRMNL to enter WiFi setup mode
@@ -288,5 +319,7 @@ marine-trmnl-server/
 ├── data/              — Device registry JSON (git-ignored)
 ├── config.yaml        — All user-facing configuration
 ├── .env.example       — Template for secrets
+├── Dockerfile         — Multi-stage build (Node 20 + Chromium + ImageMagick)
+├── docker-compose.yml — Docker Compose for Pi / local deployment
 └── package.json
 ```
