@@ -92,3 +92,14 @@ jobs:
           # Cache layers in the GitHub Actions cache to speed up rebuilds
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      # Push README.md as the Docker Hub repository overview.
+      # Only runs when DOCKERHUB_TOKEN is configured.
+      - name: Update Docker Hub description
+        if: steps.dockerhub_check.outputs.enabled == 'true'
+        uses: peter-evans/dockerhub-description@v4
+        with:
+          username: klaxian
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          repository: klaxian/marine-trmnl-server
+          readme-filepath: ./README.md
