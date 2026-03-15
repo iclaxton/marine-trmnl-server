@@ -59,9 +59,6 @@ display:
   # "light" = black text on white  (classic e-ink, best for most use cases)
   theme: "light"
 
-  # Units system. "metric" or "imperial"
-  units: "metric"
-
 # --- Metrics ---
 # Each metric can be enabled/disabled and has a SignalK path.
 # Optional `conversion` transforms raw SignalK SI values:
@@ -70,6 +67,7 @@ display:
 #   rad_to_deg      : radians     → degrees
 #   kelvin_to_c     : Kelvin      → Celsius
 #   kelvin_to_f     : Kelvin      → Fahrenheit
+#   pa_to_hpa       : Pascals     → hectopascals (mbar)
 #   ms_to_kts       alias for mps_to_kts
 metrics:
 
@@ -142,12 +140,10 @@ metrics:
         label: "House"
         voltagePath: "electrical.batteries.house.voltage"
         currentPath: "electrical.batteries.house.current"
-        decimals: 2
       - id: "start"
         label: "Start"
         voltagePath: "electrical.batteries.start.voltage"
         currentPath: ~          # null = not monitored
-        decimals: 2
 
   environment:
     enabled: true
