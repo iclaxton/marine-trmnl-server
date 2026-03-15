@@ -31,9 +31,9 @@ function getClient() {
  * @param {string} window   — Flux duration string, e.g. "15m"
  * @returns {string}        — Flux query
  */
-function buildStatsQuery(skPath, window) {
-  const bucket  = influxConfig.bucket;
-  const schema  = influxConfig.schema ?? 'path_as_measurement';
+export function buildStatsQuery(skPath, window, opts = {}) {
+  const bucket  = opts.bucket ?? influxConfig.bucket;
+  const schema  = opts.schema ?? influxConfig.schema ?? 'path_as_measurement';
 
   const dataFilter = schema === 'tagged'
     ? `filter(fn: (r) => r._measurement == "signalk")
@@ -63,7 +63,7 @@ union(tables: [
  * @param {string} fluxWindow  — e.g. "15m"
  * @returns {Promise<{last:number|null, min:number|null, max:number|null, mean:number|null}>}
  */
-async function queryStats(skPath, fluxWindow) {
+export async function queryStats(skPath, fluxWindow) {
   const queryApi = getClient().getQueryApi(influxConfig.org);
   const query    = buildStatsQuery(skPath, fluxWindow);
 
@@ -117,9 +117,9 @@ function convertStats(rawStats, metricDef) {
  * @param {string} every   — aggregate window size, e.g. "15m"
  * @returns {string}
  */
-function buildTimeSeriesQuery(skPath, window, every) {
-  const bucket = influxConfig.bucket;
-  const schema = influxConfig.schema ?? 'path_as_measurement';
+export function buildTimeSeriesQuery(skPath, window, every, opts = {}) {
+  const bucket = opts.bucket ?? influxConfig.bucket;
+  const schema = opts.schema ?? influxConfig.schema ?? 'path_as_measurement';
 
   const dataFilter = schema === 'tagged'
     ? `filter(fn: (r) => r._measurement == "signalk")
@@ -144,7 +144,7 @@ from(bucket: "${bucket}")
  * @param {string} [every="15m"] — bucket size
  * @returns {Promise<{t:number, v:number}[]>}  — [{epoch ms, raw value}]
  */
-async function queryTimeSeries(skPath, window, every = '15m') {
+export async function queryTimeSeries(skPath, window, every = '15m') {
   const queryApi = getClient().getQueryApi(influxConfig.org);
   const query    = buildTimeSeriesQuery(skPath, window, every);
   const series   = [];

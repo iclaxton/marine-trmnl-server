@@ -7,10 +7,11 @@
   "scripts": {
     "start": "node src/server.js",
     "dev": "node --watch src/server.js",
-    "test": "node --test test/unit/utils.test.js test/unit/devices.test.js test/integration/app.test.js",
-    "test:unit": "node --test test/unit/utils.test.js test/unit/devices.test.js",
-    "test:integration": "node --test test/integration/app.test.js",
-    "test:watch": "node --test --watch test/unit/utils.test.js test/unit/devices.test.js test/integration/app.test.js"
+    "test": "node --test test/unit/utils.test.js test/unit/devices.test.js test/unit/influx-builders.test.js test/integration/app.test.js",
+    "test:unit": "node --test test/unit/utils.test.js test/unit/devices.test.js test/unit/influx-builders.test.js",
+    "test:integration": "node --test test/integration/app.test.js test/integration/influx.test.js",
+    "test:influx": "node --test test/integration/influx.test.js",
+    "test:watch": "node --test --watch test/unit/utils.test.js test/unit/devices.test.js test/unit/influx-builders.test.js test/integration/app.test.js"
   },
   "engines": {
     "node": ">=20.0.0"
