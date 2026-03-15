@@ -1,0 +1,165 @@
+# ============================================================
+# Marine TRMNL Server Configuration
+# ============================================================
+# Sensitive values (tokens, passwords) should be set in .env
+# and referenced here as ${ENV_VAR_NAME}.
+# ============================================================
+
+# --- BYOS API ---
+# These settings enable the TRMNL device firmware protocol.
+byos:
+  # Base URL of THIS server, as the TRMNL device will see it on your network.
+  # Set this to your Pi's IP address (or hostname) and port.
+  baseUrl: "http://192.168.1.100:3001"
+
+  # Absolute path to Chromium/Chrome executable for headless screenshots.
+  # Raspberry Pi (after: sudo apt install chromium-browser):
+  chromiumPath: "/usr/bin/chromium-browser"
+  # macOS (uncomment if developing locally):
+  # chromiumPath: "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+
+  # Directory to store generated BMP/PNG screen files.
+  # A relative path is resolved from the project root.
+  screensDir: "./screens"
+
+# --- Vessel ---
+vessel:
+  name: "HEBE"              # Display name shown in the header
+
+# --- Server ---
+server:
+  port: 3001
+  host: "0.0.0.0"
+
+# --- InfluxDB 2.x ---
+influxdb:
+  url: "http://hebepi:8086"
+  token: "${INFLUXDB_TOKEN}"      # Set in .env
+  org: "marine"
+  bucket: "signalk"
+
+  # Schema used by your SignalK→InfluxDB plugin.
+  # "path_as_measurement" : measurement = SK path, field = "value"  (signalk-to-influxdb v1)
+  # "tagged"              : measurement = "signalk", tag path = SK path, field = "value" (v2 style)
+  schema: "path_as_measurement"
+
+# --- Display ---
+display:
+  # How often (seconds) the TRMNL device should refresh.
+  # The server uses this same window to calculate min/max/mean stats.
+  refreshIntervalSeconds: 900    # 15 minutes
+
+  # Display bit depth — set this to match your TRMNL model.
+  #   1 = 1-bit monochrome   (TRMNL Standard / Developer)  → BMP3 output
+  #   2 = 2-bit grayscale    (TRMNL OG 2-bit)              → 4-level grayscale PNG
+  bitDepth: 2
+
+  # Theme for the rendered HTML.
+  # "dark"  = white text on black  (great for e-ink TRMNL in dark environments)
+  # "light" = black text on white  (classic e-ink, best for most use cases)
+  theme: "light"
+
+  # Units system. "metric" or "imperial"
+  units: "metric"
+
+# --- Metrics ---
+# Each metric can be enabled/disabled and has a SignalK path.
+# Optional `conversion` transforms raw SignalK SI values:
+#   mps_to_kts      : metres/sec  → knots
+#   mps_to_kmh      : metres/sec  → km/h
+#   rad_to_deg      : radians     → degrees
+#   kelvin_to_c     : Kelvin      → Celsius
+#   kelvin_to_f     : Kelvin      → Fahrenheit
+#   ms_to_kts       alias for mps_to_kts
+metrics:
+
+  wind:
+    enabled: true
+    apparentSpeed:
+      label: "AWS"
+      path: "environment.wind.speedApparent"
+      unit: "kts"
+      conversion: "mps_to_kts"
+      decimals: 1
+    apparentAngle:
+      label: "AWA"
+      path: "environment.wind.angleApparent"
+      unit: "°"
+      conversion: "rad_to_deg"
+      decimals: 0
+    trueSpeed:
+      label: "TWS"
+      path: "environment.wind.speedTrue"
+      unit: "kts"
+      conversion: "mps_to_kts"
+      decimals: 1
+    trueAngle:
+      label: "TWA"
+      path: "environment.wind.angleTrueWater"
+      unit: "°"
+      conversion: "rad_to_deg"
+      decimals: 0
+
+  navigation:
+    enabled: true
+    sog:
+      label: "SOG"
+      path: "navigation.speedOverGround"
+      unit: "kts"
+      conversion: "mps_to_kts"
+      decimals: 1
+    cog:
+      label: "COG"
+      path: "navigation.courseOverGroundTrue"
+      unit: "°"
+      conversion: "rad_to_deg"
+      decimals: 0
+    heading:
+      label: "HDG"
+      path: "navigation.headingTrue"
+      unit: "°"
+      conversion: "rad_to_deg"
+      decimals: 0
+
+  depth:
+    enabled: true
+    belowKeel:
+      label: "Depth"
+      path: "environment.depth.belowKeel"
+      unit: "m"
+      decimals: 1
+    waterTemp:
+      label: "Water"
+      path: "environment.water.temperature"
+      unit: "°C"
+      conversion: "kelvin_to_c"
+      decimals: 1
+
+  battery:
+    enabled: true
+    banks:
+      - id: "house"
+        label: "House"
+        voltagePath: "electrical.batteries.house.voltage"
+        currentPath: "electrical.batteries.house.current"
+        decimals: 2
+      - id: "start"
+        label: "Start"
+        voltagePath: "electrical.batteries.start.voltage"
+        currentPath: ~          # null = not monitored
+        decimals: 2
+
+  environment:
+    enabled: true
+    insideTemp:
+      label: "Cabin"
+      path: "environment.inside.temperature"
+      unit: "°C"
+      conversion: "kelvin_to_c"
+      decimals: 1
+    outsidePressure:
+      label: "Pressure"
+      path: "environment.outside.pressure"   # SignalK path for barometric pressure
+      unit: "hPa"
+      conversion: "pa_to_hpa"               # SignalK stores in Pa; display in hPa
+      decimals: 0
