@@ -301,7 +301,7 @@ VESSEL_NAME=$(prompt "VESSEL_NAME" "Vessel name (shown on dashboard)" "$VESSEL_N
     BYOS_BASE_URL_DEFAULT="http://${_HOSTNAME}:${SERVER_PORT_DEFAULT}"
   fi
 
-  SERVER_PORT=$(prompt "SERVER_PORT" "Server port (must not conflict with other services e.g. Grafana uses 3000)" "$SERVER_PORT_DEFAULT")
+  SERVER_PORT=$(prompt "SERVER_PORT" "Server port (must not conflict with other services e.g. Grafana uses 3001)" "$SERVER_PORT_DEFAULT")
   BYOS_BASE_URL=$(prompt "BYOS_BASE_URL" "BYOS base URL (how the TRMNL device reaches this server)" "${BYOS_BASE_URL_DEFAULT//:${SERVER_PORT_DEFAULT}/:${SERVER_PORT}}")
   INFLUXDB_URL=$(prompt "INFLUXDB_URL" "InfluxDB URL" "$INFLUXDB_URL_DEFAULT")
 INFLUXDB_TOKEN=$(prompt "INFLUXDB_TOKEN" "InfluxDB API token (from InfluxDB UI → API Tokens)" "$INFLUXDB_TOKEN_DEFAULT")
