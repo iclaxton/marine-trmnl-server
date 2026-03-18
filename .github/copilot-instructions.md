@@ -10,7 +10,7 @@ mounted aboard a sailing boat. It runs on a Raspberry Pi on the vessel's local n
 SignalK (boat sensors)
   → InfluxDB 2.x  (localhost:8086)
   → HTML render   (src/renderer.js — 800×480 CSS grid dashboard)
-  → Chromium      (headless screenshot via spawnSync → PNG)
+  → Chromium      (headless screenshot via execFileAsync, non-blocking → PNG)
   → ImageMagick   (PNG → BMP3 monochrome OR 4-level grayscale PNG)
   → TRMNL device  (fetches via BYOS HTTP API)
 ```
@@ -27,7 +27,7 @@ SignalK (boat sensors)
 
 - **Runtime:** Node.js 20+, ESM (`"type": "module"`) — always `import`/`export`, never `require()`
 - **HTTP:** Fastify v5.2.1
-- **Screenshot:** system Chromium via `spawnSync` (no Puppeteer dependency)
+- **Screenshot:** system Chromium via `execFileAsync` (async, non-blocking; no Puppeteer dependency)
 - **Image conversion:** ImageMagick CLI (`convert` command — not a Node package) — see [TRMNL ImageMagick Guide](https://docs.trmnl.com/go/diy/imagemagick-guide)
 - **InfluxDB:** `@influxdata/influxdb-client`
 - **InfluxDB org/bucket:** configurable via `config.yaml` (`influxdb.org` / `influxdb.bucket`)
@@ -46,7 +46,7 @@ src/
   devices.js    — createDeviceStore(); file-backed JSON device registry
   influx.js     — queryStats(), queryTimeSeries(), buildQuery helpers
   renderer.js   — renderDashboard(), renderSetupScreen(), buildPreviewPage(), buildCss(), pressureSparklineSvg()
-  screenshot.js — screenshotHtml() headless Chromium via spawnSync
+  screenshot.js — screenshotHtml() headless Chromium via execFileAsync (async)
   server.js     — production entry point; wires deps and starts Fastify
   utils.js      — SI unit converters: mps_to_kts, rad_to_deg, kelvin_to_c, pa_to_hpa, etc.
 test/
@@ -206,7 +206,7 @@ influxdb:
   schema: "path_as_measurement"   # SignalK→InfluxDB v1 plugin format
 
 display:
-  refreshIntervalSeconds: 900     # 15 minutes
+  refreshIntervalSeconds: 300     # 5 minutes
   bitDepth: 2                     # 1 = BMP3, 2 = 4-level grayscale PNG
   theme: "light"                  # "light" | "dark"
 ```

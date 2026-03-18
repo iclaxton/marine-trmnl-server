@@ -35,9 +35,10 @@ Each value shows the **current reading** (bold/large) plus a
 - SignalK pushing data to InfluxDB via
   [`signalk-to-influxdb2`](https://github.com/tkurki/signalk-to-influxdb) or
   similar
-- A TRMNL display (Standard or Developer edition)
-- **System Chromium** (`chromium-browser`) — for headless screenshot
-- **ImageMagick** — for PNG→BMP3 conversion
+- A TRMNL display (Standard, Developer, or OG edition)
+- **System Chromium** — auto-detected on Pi (`chromium` or `chromium-browser`)
+  and macOS (Chrome, Edge, or Brave); override with `CHROMIUM_PATH` in `.env`
+- **ImageMagick** — for PNG→BMP3/grayscale conversion
 
 ---
 
@@ -80,32 +81,53 @@ Open `http://<your-pi-ip>:3002/preview` in a browser to see the live dashboard (
 
 ## Configuration
 
-All settings live in **`config.yaml`**. Sensitive values (the InfluxDB token)
-are kept in **`.env`** and referenced as `${INFLUXDB_TOKEN}`.
+All settings live in **`config.yaml`**. Sensitive or environment-specific
+values are kept in **`.env`** and referenced using `${VAR_NAME:-default}`
+syntax — the default is used if the variable is not set.
+
+Supported `.env` variables:
+
+| Variable | Purpose | Default |
+|---|---|---|
+| `INFLUXDB_TOKEN` | InfluxDB 2.x API token | *(required)* |
+| `INFLUXDB_URL` | InfluxDB URL | `http://localhost:8086` |
+| `INFLUXDB_ORG` | InfluxDB organisation | `my-org` |
+| `INFLUXDB_BUCKET` | InfluxDB bucket | `signalk` |
+| `BYOS_BASE_URL` | Server URL as seen by the TRMNL device | `http://localhost:3002` |
+| `VESSEL_NAME` | Vessel name shown in the dashboard header | `MY BOAT` |
+| `SERVER_PORT` | HTTP port the server listens on | `3002` |
+| `CHROMIUM_PATH` | Path to Chromium/Chrome binary | auto-detected |
+
+> **Docker:** set `INFLUXDB_URL=http://host.docker.internal:8086` so the
+> container can reach InfluxDB running on the Pi host.
 
 ### Key settings
 
 ```yaml
 byos:
-  baseUrl: "http://192.168.1.100:3002"   # Pi's LAN IP — used in image URLs sent to device
-  chromiumPath: "/usr/bin/chromium-browser"
+  baseUrl: "${BYOS_BASE_URL:-http://localhost:3002}"  # Set BYOS_BASE_URL in .env to your Pi's LAN IP
+  chromiumPath: "${CHROMIUM_PATH:-/usr/bin/chromium-browser}"  # Override for local dev (see .env.example)
   screensDir: "./screens"
 
 vessel:
-  name: "My Boat"          # Header label
+  name: "${VESSEL_NAME:-MY BOAT}"   # Set VESSEL_NAME in .env
+
+server:
+  port: ${SERVER_PORT:-3002}
 
 influxdb:
-  url: "http://localhost:8086"
-  token: "${INFLUXDB_TOKEN}"
-  org: "marine"
-  bucket: "signalk"
-  # Schema your SignalK plugin uses:
+  url: "${INFLUXDB_URL:-http://localhost:8086}"
+  token: "${INFLUXDB_TOKEN:-}"
+  org: "${INFLUXDB_ORG:-my-org}"
+  bucket: "${INFLUXDB_BUCKET:-signalk}"
+  # Schema used by your SignalK→InfluxDB plugin:
   #   "path_as_measurement"  — measurement = SK path, field = "value"  (most common)
   #   "tagged"               — measurement = "signalk", tag[path] = value
   schema: "path_as_measurement"
 
 display:
-  refreshIntervalSeconds: 900   # 15 min — also sets the stats window
+  refreshIntervalSeconds: 300   # 5 min — also sets the stats window
+  bitDepth: 2                   # 1 = BMP3 monochrome (Standard/Developer), 2 = grayscale PNG (OG)
   theme: "light"                # "light" or "dark"
 
 metrics:
@@ -165,12 +187,16 @@ The **scheduled pipeline** (every `refreshIntervalSeconds`) generates the file t
 ```
 InfluxDB metrics
     → HTML render (renderer.js, bitDepth-aware)
-    → Headless Chromium screenshot (spawnSync) → PNG
+    → Headless Chromium screenshot (async execFileAsync, non-blocking) → PNG
     → ImageMagick conversion
     → /screens/dashboard.bmp  (bitDepth=1, 1-bit monochrome)
        /screens/dashboard.png  (bitDepth=2, 4-level grayscale)
-    → served at {baseUrl}/screens/dashboard.<ext>
+    → served at {baseUrl}/screens/dashboard.<ext>?v=<timestamp>
 ```
+
+On startup the server immediately begins listening. The setup screen is
+generated in the background first, then the dashboard — so the device gets a
+"coming soon" screen at a 60 s poll rate until the dashboard is ready.
 
 The **on-demand render** endpoints run the same pipeline immediately and stream the result:
 
@@ -184,16 +210,18 @@ These are independent of the scheduled file — useful for layout development.
 The device hits `GET /api/display` and receives:
 ```json
 {
-  "filename": "dashboard.bmp",
-  "image_url": "http://192.168.1.100:3002/screens/dashboard.bmp",
-  "refresh_rate": 900,
+  "filename": "dashboard-1741737600000.bmp",
+  "image_url": "http://192.168.1.100:3002/screens/dashboard.bmp?v=1741737600000",
+  "refresh_rate": 300,
   "image_url_timeout": 0,
   "reset_firmware": false,
   "update_firmware": false
 }
 ```
 
-It then fetches the BMP directly and renders it.
+The `filename` field is a versioned virtual name (timestamp-stamped) used as a
+cache key by the TRMNL firmware — a new value is issued after every refresh so
+the device always re-downloads the latest image.
 
 ### Pi setup
 
@@ -327,7 +355,8 @@ sudo systemctl status marine-trmnl
 | `GET /api/render/png` | On-demand: render + convert to 4-level grayscale PNG, stream result |
 | `GET /screens/:file` | Serves the generated `dashboard.bmp` / `setup.bmp` etc. |
 | `GET /preview` | Live browser dashboard — fetches `/api/metrics`, auto-refreshes every 30 s |
-| `GET /health` | JSON status (cache state, last error, device count) |
+| `GET /preview/raw` | Raw HTML sent to Chromium — open at 800×480 in browser to verify layout |
+| `GET /health` | JSON status (readiness, last refresh, next refresh countdown, device count) |
 
 ---
 
@@ -338,7 +367,7 @@ marine-trmnl-server/
 ├── src/
 │   ├── server.js      — Production entry point; wires deps and starts Fastify
 │   ├── app.js         — createApp() factory; all routes; deps injected
-│   ├── screenshot.js  — Headless Chromium HTML→PNG (spawnSync, Pi-optimised flags)
+│   ├── screenshot.js  — Headless Chromium HTML→PNG (async execFileAsync, non-blocking)
 │   ├── converter.js   — ImageMagick PNG→BMP3 / PNG→2-bit grayscale
 │   ├── devices.js     — File-backed device registry (data/devices.json)
 │   ├── influx.js      — InfluxDB 2.x Flux queries (windowed min/max/mean/last + time-series)
